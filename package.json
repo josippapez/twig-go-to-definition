@@ -3,7 +3,6 @@
   "displayName": "Twig Go to Definition",
   "description": "Go to Definition support for Twig templates using Language Server Protocol",
   "version": "0.0.1",
-  "icon": "icon.png",
   "publisher": "YOUR_PUBLISHER_NAME",
   "author": {
     "name": "Josip Papež",
