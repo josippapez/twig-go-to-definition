@@ -3,7 +3,7 @@
   "displayName": "Twig Go to Definition",
   "description": "Go to Definition support for Twig templates using Language Server Protocol",
   "version": "0.0.1",
-  "publisher": "YOUR_PUBLISHER_NAME",
+  "publisher": "JosipPapez",
   "author": {
     "name": "Josip Papež",
     "url": "https://github.com/josippapez"

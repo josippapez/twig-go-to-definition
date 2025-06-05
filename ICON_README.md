@@ -3,7 +3,7 @@
 Since I cannot create actual image files, you'll need to create a 128x128 PNG icon named `icon.png` in the root directory.
 
 Suggested icon design:
-- Twig logo or stylized "T" 
+- Twig logo or stylized "T"
 - Arrow or navigation symbol (→)
 - Blue/green color scheme
 - 128x128 pixels

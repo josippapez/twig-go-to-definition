@@ -4,10 +4,10 @@
 
 ### 1. Update package.json
 
-- [x] ~~Replace `YOUR_PUBLISHER_NAME` with your actual publisher name~~ (Still needed)
+- [x] ~~Replace `YOUR_PUBLISHER_NAME` with your actual publisher name~~
 - [x] ~~Replace `YOUR_USERNAME` with your GitHub username~~ ✅ Done (josippapez)
 - [x] ~~Update repository URLs to point to your actual repository~~ ✅ Done
-- [ ] Ensure extension name is unique in marketplace
+- [x] Ensure extension name is unique in marketplace
 
 ### 2. Publisher Account Setup
 
