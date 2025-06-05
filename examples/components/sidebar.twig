@@ -1,0 +1,18 @@
+<aside class="sidebar">
+    <h3>Quick Links</h3>
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/blog">Blog</a></li>
+        <li><a href="/products">Products</a></li>
+    </ul>
+
+    <div class="widget">
+        <h4>Recent Posts</h4>
+        {% for post in recent_posts %}
+        <div class="post-preview">
+            <h5>{{ post.title }}</h5>
+            <p>{{ post.excerpt }}</p>
+        </div>
+        {% endfor %}
+    </div>
+</aside>

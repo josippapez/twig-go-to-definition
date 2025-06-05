@@ -1,0 +1,18 @@
+{% extends "base.twig" %}
+
+{% block title %}Page Title - My Website{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Welcome to our page!</h2>
+    <p>This is the main content area.</p>
+
+    {% include "components/sidebar.twig" %}
+
+    <div class="article">
+        <h3>{{ article.title }}</h3>
+        <p>{{ article.content }}</p>
+        <small>Published: {{ article.date }}</small>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}Default Title{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <h1>{% block header %}My Website{% endblock %}</h1>
+    </header>
+
+    <main>
+        {% block content %}
+        <p>Default content goes here.</p>
+        {% endblock %}
+    </main>
+
+    <footer>
+        {% include "footer.twig" %}
+    </footer>
+</body>
+</html>

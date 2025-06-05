@@ -1,0 +1,87 @@
+{
+  "name": "twig-go-to-definition",
+  "displayName": "Twig Go to Definition",
+  "description": "Go to Definition support for Twig templates using Language Server Protocol",
+  "version": "0.0.1",
+  "icon": "icon.png",
+  "publisher": "YOUR_PUBLISHER_NAME",
+  "author": {
+    "name": "Josip Papež",
+    "url": "https://github.com/josippapez"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "twig",
+    "template",
+    "go to definition",
+    "language server",
+    "symfony",
+    "php",
+    "navigation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/josippapez/twig-go-to-definition.git"
+  },
+  "bugs": {
+    "url": "https://github.com/josippapez/twig-go-to-definition/issues"
+  },
+  "homepage": "https://github.com/josippapez/twig-go-to-definition#readme",
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "twig",
+        "aliases": ["Twig", "twig"],
+        "extensions": [".twig", ".html.twig"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "twig",
+        "scopeName": "text.html.twig",
+        "path": "./syntaxes/twig.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.100.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.3",
+    "eslint": "^9.25.1",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "dependencies": {
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-uri": "^3.1.0"
+  }
+}

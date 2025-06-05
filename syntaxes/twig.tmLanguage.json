@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Twig",
+  "scopeName": "text.html.twig",
+  "patterns": [
+    { "include": "#twig-comment" },
+    { "include": "#twig-statement" },
+    { "include": "#twig-variable" },
+    { "include": "text.html.basic" }
+  ],
+  "repository": {
+    "twig-comment": {
+      "name": "comment.block.twig",
+      "begin": "\\{#",
+      "end": "#\\}",
+      "patterns": []
+    },
+    "twig-statement": {
+      "name": "meta.tag.twig",
+      "begin": "\\{%\\s*",
+      "end": "\\s*%\\}",
+      "patterns": [
+        {
+          "name": "keyword.control.twig",
+          "match": "\\b(if|else|elseif|endif|for|endfor|while|endwhile|set|block|endblock|extends|include|import|from|macro|endmacro|filter|endfilter|spaceless|endspaceless|autoescape|endautoescape|raw|endraw|verbatim|endverbatim|apply|endapply|with|only|ignore|missing)\\b"
+        },
+        {
+          "name": "string.quoted.single.twig",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twig",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.twig",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twig",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "twig-variable": {
+      "name": "meta.variable.twig",
+      "begin": "\\{\\{\\s*",
+      "end": "\\s*\\}\\}",
+      "patterns": [
+        {
+          "name": "variable.other.twig",
+          "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+          "name": "string.quoted.single.twig",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twig",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.twig",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.twig",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
