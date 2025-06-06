@@ -20,7 +20,7 @@ This extension adds intelligent navigation support for Twig templates:
 
 ## Requirements
 
-- VS Code 1.100.0 or higher
+- VS Code 1.90.0 or higher
 - Twig template files with `.twig` or `.html.twig` extensions
 
 ## Extension Settings

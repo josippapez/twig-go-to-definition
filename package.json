@@ -2,14 +2,14 @@
   "name": "twig-go-to-definition",
   "displayName": "Twig Go to Definition",
   "description": "Go to Definition support for Twig templates using Language Server Protocol",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "publisher": "JosipPapez",
   "author": {
     "name": "Josip Papež",
     "url": "https://github.com/josippapez"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Programming Languages"
@@ -67,7 +67,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/test-cli": "^0.0.10",
