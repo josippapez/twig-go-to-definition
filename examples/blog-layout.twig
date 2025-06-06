@@ -1,0 +1,59 @@
+{# Layout template extending base for blog-specific features #}
+{% extends "base.twig" %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="/css/blog.css">
+{% endblock %}
+
+{% block navigation %}
+    {{ parent() }}
+    <div class="blog-breadcrumb">
+        <a href="/">Home</a> &raquo;
+        <a href="/blog">Blog</a>
+        {% if current_category is defined %}
+            &raquo; <span>{{ current_category.name }}</span>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="blog-layout">
+    <main class="blog-main">
+        {% block blog_content %}
+        {# This block will be overridden by specific blog pages #}
+        <p>Default blog content</p>
+        {% endblock %}
+    </main>
+
+    {% block blog_sidebar %}
+    <aside class="blog-sidebar">
+        {% include "components/sidebar.twig" with {
+            'title': 'Blog Sidebar',
+            'show_categories': true
+        } %}
+
+        {# Test block() reference to parent template #}
+        <div class="main-sidebar">
+            {{ block('sidebar') }}
+        </div>
+    </aside>
+    {% endblock %}
+</div>
+{% endblock %}
+
+{% block footer %}
+    <div class="blog-footer">
+        {{ parent() }}
+
+        {# Test variable in footer context #}
+        {% set blog_info = {
+            'total_posts': blog_stats.post_count,
+            'categories': blog_stats.category_count
+        } %}
+
+        <div class="blog-stats">
+            <p>{{ blog_info.total_posts }} posts in {{ blog_info.categories }} categories</p>
+        </div>
+    </div>
+{% endblock %}

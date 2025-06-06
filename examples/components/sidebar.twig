@@ -1,5 +1,5 @@
 <aside class="sidebar">
-    <h3>Quick Links</h3>
+    <h3>{{ title|default('Quick Links') }}</h3>
     <ul>
         <li><a href="/">Home</a></li>
         <li><a href="/blog">Blog</a></li>
@@ -11,8 +11,40 @@
         {% for post in recent_posts %}
         <div class="post-preview">
             <h5>{{ post.title }}</h5>
-            <p>{{ post.excerpt }}</p>
+            <p>{{ post.excerpt|truncate(100) }}</p>
+            <small>{{ post.published_at|date('M d, Y') }}</small>
         </div>
         {% endfor %}
     </div>
+
+    <!-- Test variable definitions in loops -->
+    {% if categories is defined %}
+        <div class="categories">
+            <h4>Categories</h4>
+            {% for category in categories %}
+                {% set post_count = category.posts|length %}
+                <div class="category-item">
+                    <a href="/category/{{ category.slug }}">
+                        {{ category.name }} ({{ post_count }})
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Test conditional blocks -->
+    {% if user is defined and user.is_authenticated %}
+        <div class="user-menu">
+            <h4>Welcome, {{ user.name }}!</h4>
+            <ul>
+                <li><a href="/profile">Profile</a></li>
+                <li><a href="/settings">Settings</a></li>
+                <li><a href="/logout">Logout</a></li>
+            </ul>
+        </div>
+    {% else %}
+        <div class="login-prompt">
+            <a href="/login">Login</a> | <a href="/register">Register</a>
+        </div>
+    {% endif %}
 </aside>

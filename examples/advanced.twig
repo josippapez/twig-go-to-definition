@@ -1,0 +1,156 @@
+{% extends "base.twig" %}
+
+{# Advanced example showcasing all Twig Go to Definition features #}
+
+{% block title %}Advanced Example - {{ site_name }}{% endblock %}
+
+{% block meta %}
+    {{ parent() }}
+    <meta name="author" content="{{ page.author.name }}">
+    <meta property="og:title" content="{{ block('title') }}">
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="/css/advanced.css">
+{% endblock %}
+
+{% block navigation %}
+    {# Override navigation with custom content #}
+    <nav class="advanced-nav">
+        {% set nav_items = [
+            {'url': '/', 'label': 'Home'},
+            {'url': '/blog', 'label': 'Blog'},
+            {'url': '/portfolio', 'label': 'Portfolio'},
+            {'url': '/contact', 'label': 'Contact'}
+        ] %}
+
+        <ul>
+            {% for item in nav_items %}
+                {% set is_current = (current_page == item.url) %}
+                <li class="{{ is_current ? 'current' : '' }}">
+                    <a href="{{ item.url }}">{{ item.label }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="advanced-content">
+    <h1>{{ page_title }}</h1>
+
+    {# Test parent() call within custom content #}
+    <div class="default-content-wrapper">
+        <h2>Default Content:</h2>
+        {{ parent() }}
+    </div>
+
+    {# Test macro usage and imports #}
+    {% from _self import render_card %}
+
+    <div class="content-grid">
+        {% for item in featured_items %}
+            {{ render_card(item) }}
+        {% endfor %}
+    </div>
+
+    {# Test block() function calls #}
+    <section class="highlights">
+        <h2>Highlights</h2>
+        {{ block('highlights_content') }}
+    </section>
+
+    {# Test variable manipulation #}
+    {% set stats = {
+        'total_posts': posts|length,
+        'total_views': posts|sum(p => p.views),
+        'avg_views': (posts|sum(p => p.views) / posts|length)|round
+    } %}
+
+    <div class="statistics">
+        <h3>Site Statistics</h3>
+        <ul>
+            <li>Total Posts: {{ stats.total_posts }}</li>
+            <li>Total Views: {{ stats.total_views|number_format }}</li>
+            <li>Average Views: {{ stats.avg_views|number_format }}</li>
+        </ul>
+    </div>
+
+    {# Test nested includes with context #}
+    {% for section in content_sections %}
+        {% include "components/content-section.twig" with {
+            'section': section,
+            'index': loop.index
+        } only %}
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block highlights_content %}
+<div class="highlights-grid">
+    {% for highlight in highlights %}
+        <div class="highlight-item">
+            <h4>{{ highlight.title }}</h4>
+            <p>{{ highlight.description }}</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block sidebar %}
+    {# Test include with parent() call #}
+    <div class="advanced-sidebar">
+        {{ parent() }}
+
+        {% include "components/sidebar.twig" with {
+            'title': 'Advanced Sidebar',
+            'show_categories': true
+        } %}
+
+        {# Test block reference from current template #}
+        <div class="sidebar-highlights">
+            {{ block('highlights_content') }}
+        </div>
+    </div>
+{% endblock %}
+
+{% block footer %}
+    <div class="advanced-footer">
+        {# Call parent footer but with modifications #}
+        {{ parent() }}
+
+        <div class="footer-extras">
+            <p>This is an advanced example template.</p>
+
+            {# Test variable scope in nested blocks #}
+            {% set footer_year = "now"|date("Y") %}
+            <p>Generated in {{ footer_year }}</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="/js/advanced.js"></script>
+
+    {# Test variable in script context #}
+    <script>
+        window.pageData = {
+            title: {{ page_title|json_encode|raw }},
+            stats: {{ stats|json_encode|raw }}
+        };
+    </script>
+{% endblock %}
+
+{# Macro definition for testing imports #}
+{% macro render_card(item) %}
+    <div class="card">
+        <h3>{{ item.title }}</h3>
+        <p>{{ item.description|truncate(150) }}</p>
+        {% if item.image %}
+            <img src="{{ item.image }}" alt="{{ item.title }}">
+        {% endif %}
+        <a href="{{ item.url }}" class="read-more">Read More</a>
+    </div>
+{% endmacro %}

@@ -1,10 +1,42 @@
 <footer class="site-footer">
     <div class="footer-content">
-        <p>&copy; {{ "now"|date("Y") }} My Website. All rights reserved.</p>
-        <nav>
+        <p>&copy; {{ "now"|date("Y") }} {{ site_name|default("My Website") }}. All rights reserved.</p>
+
+        <nav class="footer-nav">
             <a href="/about">About</a>
             <a href="/contact">Contact</a>
             <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
         </nav>
+
+        <!-- Test variable assignments and references -->
+        {% set current_year = "now"|date("Y") %}
+        {% set company_founded = 2020 %}
+        {% set years_in_business = current_year - company_founded %}
+
+        <div class="company-info">
+            <p>Serving customers for {{ years_in_business }} years!</p>
+            <p>Founded in {{ company_founded }}</p>
+        </div>
+
+        <!-- Test conditional content -->
+        {% if show_social_links|default(true) %}
+            <div class="social-links">
+                <h4>Follow Us</h4>
+                {% for social in social_networks %}
+                    <a href="{{ social.url }}" target="_blank">
+                        {{ social.name }}
+                    </a>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Test include with variables -->
+        {% if show_newsletter|default(false) %}
+            {% include "components/newsletter.twig" with {
+                'title': 'Stay Updated',
+                'placeholder': 'Enter your email'
+            } only %}
+        {% endif %}
     </div>
 </footer>

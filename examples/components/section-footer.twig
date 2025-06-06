@@ -1,0 +1,40 @@
+<footer class="section-footer">
+    <div class="section-meta">
+        {% set section_info = {
+            'id': section_id,
+            'type': section_type,
+            'updated': 'now'|date('Y-m-d H:i:s')
+        } %}
+
+        <p>Section ID: {{ section_info.id }}</p>
+        <p>Type: {{ section_info.type|title }}</p>
+        <p>Last updated: {{ section_info.updated }}</p>
+    </div>
+
+    {# Test variable conditionals #}
+    {% if section_type == 'featured' %}
+        <div class="featured-badge">
+            <span>Featured Content</span>
+        </div>
+    {% elseif section_type == 'premium' %}
+        <div class="premium-badge">
+            <span>Premium Content</span>
+        </div>
+    {% endif %}
+
+    {# Test loop variables in footer context #}
+    {% set footer_links = [
+        {'text': 'Edit Section', 'url': '/admin/sections/' ~ section_id ~ '/edit'},
+        {'text': 'View Stats', 'url': '/admin/sections/' ~ section_id ~ '/stats'},
+        {'text': 'Delete Section', 'url': '/admin/sections/' ~ section_id ~ '/delete'}
+    ] %}
+
+    <nav class="section-actions">
+        {% for link in footer_links %}
+            <a href="{{ link.url }}" class="action-link">
+                {{ link.text }}
+            </a>
+            {% if not loop.last %} | {% endif %}
+        {% endfor %}
+    </nav>
+</footer>

@@ -1,0 +1,43 @@
+<section class="content-section section-{{ index }}">
+    <header class="section-header">
+        <h3>{{ section.title }}</h3>
+        {% if section.subtitle %}
+            <p class="subtitle">{{ section.subtitle }}</p>
+        {% endif %}
+    </header>
+
+    <div class="section-content">
+        {{ section.content|raw }}
+    </div>
+
+    {# Test variable definitions within components #}
+    {% if section.items is defined %}
+        {% set item_count = section.items|length %}
+        <div class="section-items">
+            <h4>Items ({{ item_count }})</h4>
+
+            {% for item in section.items %}
+                {% set item_class = loop.first ? 'first-item' : (loop.last ? 'last-item' : 'middle-item') %}
+                <div class="item {{ item_class }}">
+                    <h5>{{ item.name }}</h5>
+                    <p>{{ item.description }}</p>
+
+                    {# Test nested variable references #}
+                    {% if item.metadata is defined %}
+                        {% for key, value in item.metadata %}
+                            <span class="metadata">{{ key }}: {{ value }}</span>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {# Test conditional includes #}
+    {% if section.show_footer|default(false) %}
+        {% include "section-footer.twig" with {
+            'section_id': section.id,
+            'section_type': section.type
+        } only %}
+    {% endif %}
+</section>

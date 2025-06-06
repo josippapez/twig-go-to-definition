@@ -1,0 +1,35 @@
+<nav class="post-navigation">
+    {% if previous_post or next_post %}
+        <div class="nav-links">
+            {% if previous_post %}
+                {% set prev = previous_post %}
+                <div class="nav-previous">
+                    <a href="{{ prev.url }}" rel="prev">
+                        <span class="nav-subtitle">Previous Post</span>
+                        <span class="nav-title">{{ prev.title }}</span>
+                    </a>
+                </div>
+            {% endif %}
+
+            {% if next_post %}
+                {% set next = next_post %}
+                <div class="nav-next">
+                    <a href="{{ next.url }}" rel="next">
+                        <span class="nav-subtitle">Next Post</span>
+                        <span class="nav-title">{{ next.title }}</span>
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+
+        {# Test variable calculations #}
+        {% set nav_count = (previous_post ? 1 : 0) + (next_post ? 1 : 0) %}
+        <div class="nav-info">
+            <p>{{ nav_count }} navigation {{ nav_count == 1 ? 'link' : 'links' }} available</p>
+        </div>
+    {% else %}
+        <div class="no-navigation">
+            <p>No other posts to navigate to.</p>
+        </div>
+    {% endif %}
+</nav>

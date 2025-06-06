@@ -1,0 +1,48 @@
+{# Test template for comprehensive Twig Go to Definition testing #}
+{% extends "base.twig" %}
+
+{% block title %}Test Page - {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <h1>{{ page_title }}</h1>
+
+    {# Test parent() call #}
+    <div class="parent-content">
+        {{ parent() }}
+    </div>
+
+    {# Test include #}
+    {% include "components/sidebar.twig" %}
+
+    {# Test block() function #}
+    <div class="block-reference">
+        {{ block('footer') }}
+    </div>
+
+    {# Test variable references #}
+    <div class="variables">
+        <p>User: {{ user.name }}</p>
+        <p>Email: {{ user.email }}</p>
+        <p>Posts: {{ user.posts|length }}</p>
+    </div>
+
+    {# Test for loop variables #}
+    {% for item in items %}
+        <div class="item">
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.description }}</p>
+        </div>
+    {% endfor %}
+
+    {# Test set variables #}
+    {% set custom_var = "test value" %}
+    <p>Custom variable: {{ custom_var }}</p>
+</div>
+{% endblock %}
+
+{% block footer %}
+<footer class="test-footer">
+    <p>&copy; {{ "now"|date("Y") }} Test Site</p>
+</footer>
+{% endblock %}

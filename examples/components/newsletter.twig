@@ -1,0 +1,31 @@
+<div class="newsletter-signup">
+    <h4>{{ title|default('Newsletter') }}</h4>
+    <p>Subscribe to get the latest updates and news.</p>
+
+    <form action="/newsletter/subscribe" method="post">
+        <div class="form-group">
+            <input
+                type="email"
+                name="email"
+                placeholder="{{ placeholder|default('Your email address') }}"
+                required
+            >
+            <button type="submit">Subscribe</button>
+        </div>
+
+        <!-- Test variable usage in forms -->
+        {% set form_id = 'newsletter-' ~ random() %}
+        <input type="hidden" name="form_id" value="{{ form_id }}">
+
+        {% if csrf_token is defined %}
+            <input type="hidden" name="_token" value="{{ csrf_token }}">
+        {% endif %}
+    </form>
+
+    <!-- Test conditional messages -->
+    {% if subscription_message is defined %}
+        <div class="message {{ subscription_status|default('info') }}">
+            {{ subscription_message }}
+        </div>
+    {% endif %}
+</div>

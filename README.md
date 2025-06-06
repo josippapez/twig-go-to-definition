@@ -8,7 +8,12 @@ This extension adds intelligent navigation support for Twig templates:
 
 - **Template Navigation**: Click on template names in `{% extends %}` and `{% include %}` statements to jump to the referenced template file
 - **Block Navigation**: Navigate from block references to their definitions in parent templates
-- **Variable References**: Support for Twig variable navigation (coming soon)
+- **Parent Call Navigation**: Navigate from `{{ parent() }}` calls to the parent template's block definition
+- **Block Function Navigation**: Navigate from `{{ block('name') }}` calls to block definitions
+- **Variable References**: Navigate to variable definitions within templates
+- **Auto-completion**: Intelligent completion for template names, block names, variables, and Twig tags
+- **Hover Information**: Detailed information about templates, blocks, and variables on hover
+- **Diagnostics**: Real-time validation of template references and syntax
 - **Automatic File Discovery**: Intelligent resolution of template paths across common Twig project structures
 
 ### Supported Twig Features
@@ -16,7 +21,12 @@ This extension adds intelligent navigation support for Twig templates:
 - `{% extends "template.twig" %}` - Navigate to parent template
 - `{% include "partial.twig" %}` - Navigate to included template
 - `{% block content %}` - Navigate to block definitions in parent templates
-- Variable references in `{{ variable }}` syntax (planned)
+- `{{ parent() }}` - Navigate to parent template's block definition
+- `{{ block('name') }}` - Navigate to block definitions
+- Variable references in `{{ variable }}` syntax
+- Variable definitions in `{% set %}` and `{% for %}` loops
+- Template and block auto-completion
+- Real-time error detection for missing templates and blocks
 
 ## Requirements
 
@@ -43,11 +53,26 @@ The extension automatically searches for templates in common Twig project direct
 
 ## Known Issues
 
-- Variable reference navigation is not yet implemented
-- Only supports basic Twig syntax patterns
-- Template path resolution may not work with complex custom directory structures
+- Variable reference navigation is limited to local template scope
+- Complex Twig expressions may not be fully supported
+- Template path resolution may not work with highly customized directory structures
+- Performance may be impacted with very large template hierarchies
 
 ## Release Notes
+
+### 0.0.4
+
+Enhanced implementation with comprehensive feature support:
+
+- Added navigation for `{{ parent() }}` calls to parent template blocks
+- Added navigation for `{{ block('name') }}` function calls
+- Implemented variable reference navigation within templates
+- Added intelligent auto-completion for templates, blocks, variables, and Twig tags
+- Added hover information with detailed context
+- Added real-time diagnostics for template validation
+- Improved template path resolution with better error handling
+- Enhanced block navigation across template inheritance chains
+- Added support for variable definitions in `{% set %}` and `{% for %}` statements
 
 ### 0.0.1
 

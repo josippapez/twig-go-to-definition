@@ -1,18 +1,64 @@
 {% extends "base.twig" %}
 
-{% block title %}Page Title - My Website{% endblock %}
+{% block title %}{{ page.title }} - {{ site_name }}{% endblock %}
+
+{% block meta %}
+    <meta name="description" content="{{ page.description }}">
+    <meta name="keywords" content="{{ page.keywords|join(', ') }}">
+{% endblock %}
 
 {% block content %}
 <div class="container">
     <h2>Welcome to our page!</h2>
     <p>This is the main content area.</p>
 
+    <!-- Show how parent() works -->
+    <div class="default-content">
+        {{ parent() }}
+    </div>
+
     {% include "components/sidebar.twig" %}
 
     <div class="article">
         <h3>{{ article.title }}</h3>
         <p>{{ article.content }}</p>
-        <small>Published: {{ article.date }}</small>
+        <small>Published: {{ article.date|date('F j, Y') }}</small>
+
+        <!-- Test block() function call -->
+        <div class="author-info">
+            {{ block('author_info') }}
+        </div>
     </div>
+
+    <!-- Test variable definitions and references -->
+    {% set total_views = article.views + page.views %}
+    <p>Total views: {{ total_views }}</p>
+
+    <!-- Test for loop with variables -->
+    {% if article.tags %}
+        <div class="tags">
+            <h4>Tags:</h4>
+            {% for tag in article.tags %}
+                <span class="tag">{{ tag.name }}</span>
+                {% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block author_info %}
+<div class="author">
+    <p>By: {{ article.author.name }}</p>
+    <p>Email: {{ article.author.email }}</p>
+</div>
+{% endblock %}
+
+{% block sidebar %}
+    {% include "components/sidebar.twig" with {'title': 'Page Sidebar'} %}
+
+    <!-- Test block reference -->
+    <div class="footer-preview">
+        {{ block('footer') }}
+    </div>
 {% endblock %}

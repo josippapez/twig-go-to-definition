@@ -14,7 +14,10 @@ import {
   Definition,
   Location,
   Range,
-  Position
+  Position,
+  Hover,
+  MarkupKind,
+  MarkupContent
 } from 'vscode-languageserver/node';
 
 import {
@@ -56,10 +59,13 @@ connection.onInitialize((params: InitializeParams) => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       // Tell the client that this server supports code completion.
       completionProvider: {
-        resolveProvider: true
+        resolveProvider: true,
+        triggerCharacters: ['{', '%', '"', "'"]
       },
       // Tell the client that this server supports go to definition
-      definitionProvider: true
+      definitionProvider: true,
+      // Tell the client that this server supports hover
+      hoverProvider: true
     }
   };
   if (hasWorkspaceFolderCapability) {
@@ -82,6 +88,17 @@ connection.onInitialized(() => {
       connection.console.log('Workspace folder change event received.');
     });
   }
+
+  // Initialize parser when workspace folders are available
+  connection.workspace.getWorkspaceFolders().then(folders => {
+    if (folders && folders.length > 0) {
+      const workspaceRoot = URI.parse(folders[0].uri).fsPath;
+      parser = new TwigParser(workspaceRoot);
+      connection.console.log(`Twig parser initialized with workspace root: ${workspaceRoot}`);
+    } else {
+      connection.console.log('No workspace folders found');
+    }
+  });
 });
 
 // Twig parser and utilities
@@ -90,6 +107,16 @@ interface TwigTemplate {
   includes: string[];
   blocks: { [name: string]: Range };
   variables: { [name: string]: Range[] };
+  blockReferences: { [name: string]: Range[] };
+  parentCalls: Range[]; // For {{ parent() }} calls
+}
+
+interface TwigMatch {
+  type: 'extends' | 'include' | 'block' | 'block_reference' | 'variable' | 'parent_call';
+  name: string;
+  range: Range;
+  templateName?: string;
+  blockName?: string; // For parent calls within blocks
 }
 
 class TwigParser {
@@ -104,18 +131,20 @@ class TwigParser {
     const template: TwigTemplate = {
       includes: [],
       blocks: {},
-      variables: {}
+      variables: {},
+      blockReferences: {},
+      parentCalls: []
     };
 
     // Parse extends statements
-    const extendsRegex = /\{%\s*extends\s+['""]([^'"]*)['"]\s*%\}/g;
+    const extendsRegex = /\{%\s*extends\s+['"]([^'"]*)['"]\s*%\}/g;
     let match;
     while ((match = extendsRegex.exec(text)) !== null) {
       template.extends = match[1];
     }
 
-    // Parse include statements
-    const includeRegex = /\{%\s*include\s+['""]([^'"]*)['"]/g;
+    // Parse include statements - support both basic includes and includes with variables
+    const includeRegex = /\{%\s*include\s+['"]([^'"]*)['"]/g;
     while ((match = includeRegex.exec(text)) !== null) {
       template.includes.push(match[1]);
     }
@@ -128,9 +157,63 @@ class TwigParser {
       template.blocks[match[1]] = Range.create(position, endPosition);
     }
 
-    // Parse variable references
-    const variableRegex = /\{\{\s*(\w+)/g;
+    // Parse parent() calls
+    const parentRegex = /\{\{\s*parent\(\)\s*\}\}/g;
+    while ((match = parentRegex.exec(text)) !== null) {
+      const position = document.positionAt(match.index);
+      const endPosition = document.positionAt(match.index + match[0].length);
+      template.parentCalls.push(Range.create(position, endPosition));
+    }
+
+    // Parse block() function references
+    const blockFuncRegex = /\{\{\s*block\(\s*['"](\w+)['"]\s*\)\s*\}\}/g;
+    while ((match = blockFuncRegex.exec(text)) !== null) {
+      const blockName = match[1];
+      const position = document.positionAt(match.index);
+      const endPosition = document.positionAt(match.index + match[0].length);
+
+      if (!template.blockReferences[blockName]) {
+        template.blockReferences[blockName] = [];
+      }
+      template.blockReferences[blockName].push(Range.create(position, endPosition));
+    }
+
+    // Parse variable references - improved to handle more complex patterns
+    const variableRegex = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*(?:\[[^\]]*\])*)/g;
     while ((match = variableRegex.exec(text)) !== null) {
+      const varName = match[1].split('.')[0]; // Get the root variable name
+      const position = document.positionAt(match.index + match[0].indexOf(match[1]));
+      const endPosition = document.positionAt(match.index + match[0].indexOf(match[1]) + varName.length);
+
+      if (!template.variables[varName]) {
+        template.variables[varName] = [];
+      }
+      template.variables[varName].push(Range.create(position, endPosition));
+    }
+
+    // Also parse variables in for loops and set statements
+    const forVarRegex = /\{%\s*for\s+(\w+)(?:\s*,\s*(\w+))?\s+in\s+/g;
+    while ((match = forVarRegex.exec(text)) !== null) {
+      // Add loop variables
+      const vars = [match[1]];
+      if (match[2]) {
+        vars.push(match[2]);
+      }
+
+      for (const varName of vars) {
+        const position = document.positionAt(match.index + match[0].indexOf(varName));
+        const endPosition = document.positionAt(match.index + match[0].indexOf(varName) + varName.length);
+
+        if (!template.variables[varName]) {
+          template.variables[varName] = [];
+        }
+        template.variables[varName].push(Range.create(position, endPosition));
+      }
+    }
+
+    // Parse set statements
+    const setVarRegex = /\{%\s*set\s+(\w+)/g;
+    while ((match = setVarRegex.exec(text)) !== null) {
       const varName = match[1];
       const position = document.positionAt(match.index + match[0].indexOf(varName));
       const endPosition = document.positionAt(match.index + match[0].indexOf(varName) + varName.length);
@@ -144,134 +227,858 @@ class TwigParser {
     return template;
   }
 
+  findTwigMatchAtPosition(document: TextDocument, position: Position): TwigMatch | null {
+    const text = document.getText();
+    const offset = document.offsetAt(position);
+
+    // Check extends statements
+    const extendsRegex = /\{%\s*extends\s+['"]([^'"]*)['"]\s*%\}/g;
+    let match;
+    while ((match = extendsRegex.exec(text)) !== null) {
+      const start = match.index + match[0].indexOf(match[1]);
+      const end = start + match[1].length;
+
+      if (offset >= start && offset <= end) {
+        return {
+          type: 'extends',
+          name: match[1],
+          templateName: match[1],
+          range: Range.create(
+            document.positionAt(start),
+            document.positionAt(end)
+          )
+        };
+      }
+    }
+
+    // Check include statements
+    const includeRegex = /\{%\s*include\s+['"]([^'"]*)['"]/g;
+    while ((match = includeRegex.exec(text)) !== null) {
+      const start = match.index + match[0].indexOf(match[1]);
+      const end = start + match[1].length;
+
+      if (offset >= start && offset <= end) {
+        return {
+          type: 'include',
+          name: match[1],
+          templateName: match[1],
+          range: Range.create(
+            document.positionAt(start),
+            document.positionAt(end)
+          )
+        };
+      }
+    }
+
+    // Check parent() calls
+    const parentRegex = /\{\{\s*parent\(\)\s*\}\}/g;
+    while ((match = parentRegex.exec(text)) !== null) {
+      if (offset >= match.index && offset <= match.index + match[0].length) {
+        // Find which block this parent() call is in
+        const blockName = this.findCurrentBlock(text, match.index);
+        return {
+          type: 'parent_call',
+          name: 'parent',
+          blockName: blockName || undefined,
+          range: Range.create(
+            document.positionAt(match.index),
+            document.positionAt(match.index + match[0].length)
+          )
+        };
+      }
+    }
+
+    // Check block() function references
+    const blockFuncRegex = /\{\{\s*block\(\s*['"](\w+)['"]\s*\)\s*\}\}/g;
+    while ((match = blockFuncRegex.exec(text)) !== null) {
+      const start = match.index + match[0].indexOf(match[1]);
+      const end = start + match[1].length;
+
+      if (offset >= start && offset <= end) {
+        return {
+          type: 'block_reference',
+          name: match[1],
+          range: Range.create(
+            document.positionAt(start),
+            document.positionAt(end)
+          )
+        };
+      }
+    }
+
+    // Check block definitions
+    const blockRegex = /\{%\s*block\s+(\w+)\s*%\}/g;
+    while ((match = blockRegex.exec(text)) !== null) {
+      const start = match.index + match[0].indexOf(match[1]);
+      const end = start + match[1].length;
+
+      if (offset >= start && offset <= end) {
+        return {
+          type: 'block',
+          name: match[1],
+          range: Range.create(
+            document.positionAt(start),
+            document.positionAt(end)
+          )
+        };
+      }
+    }
+
+    // Check variable references
+    const variableRegex = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]*)*)/g;
+    while ((match = variableRegex.exec(text)) !== null) {
+      const start = match.index + match[0].indexOf(match[1]);
+      const end = start + match[1].length;
+
+      if (offset >= start && offset <= end) {
+        return {
+          type: 'variable',
+          name: match[1],
+          range: Range.create(
+            document.positionAt(start),
+            document.positionAt(end)
+          )
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // Helper method to find which block a position is within
+  private findCurrentBlock(text: string, position: number): string | null {
+    const blockStartRegex = /\{%\s*block\s+(\w+)\s*%\}/g;
+    const blockEndRegex = /\{%\s*endblock\s*(?:\w+\s*)?%\}/g;
+
+    let lastBlockName: string | null = null;
+    let lastBlockStart = -1;
+    let match;
+
+    // Find all block starts before the position
+    while ((match = blockStartRegex.exec(text)) !== null) {
+      if (match.index < position) {
+        lastBlockName = match[1];
+        lastBlockStart = match.index;
+      } else {
+        break;
+      }
+    }
+
+    // Check if there's an endblock between the last block start and the position
+    if (lastBlockStart !== -1) {
+      blockEndRegex.lastIndex = lastBlockStart;
+      const endMatch = blockEndRegex.exec(text);
+      if (endMatch && endMatch.index < position) {
+        return null; // Position is after the block end
+      }
+      return lastBlockName;
+    }
+
+    return null;
+  }
+
   resolveTemplatePath(templateName: string, currentDocumentUri: string): string | null {
     try {
       const currentDir = path.dirname(URI.parse(currentDocumentUri).fsPath);
+      connection.console.log(`Resolving template: "${templateName}" from: ${currentDocumentUri}`);
 
       // Try different common Twig template paths
       const possiblePaths = [
+        // Relative to current file - this is important for same-directory includes
         path.resolve(currentDir, templateName),
+        // If templateName contains a path like "components/file.twig", try relative to workspace root
+        path.resolve(this.workspaceRoot, templateName),
+        // Try from examples directory (for our test case)
+        path.resolve(this.workspaceRoot, 'examples', templateName),
+        // Common Twig template directories
         path.resolve(this.workspaceRoot, 'templates', templateName),
         path.resolve(this.workspaceRoot, 'views', templateName),
         path.resolve(this.workspaceRoot, 'src/templates', templateName),
         path.resolve(this.workspaceRoot, 'app/Resources/views', templateName),
+        // Additional common patterns
+        path.resolve(this.workspaceRoot, 'public/templates', templateName),
+        path.resolve(this.workspaceRoot, 'web/templates', templateName),
+        path.resolve(this.workspaceRoot, 'assets/templates', templateName),
       ];
 
-      // Add .twig extension if not present
-      const pathsWithExtension = possiblePaths.flatMap(p => [
-        p,
-        p.endsWith('.twig') ? p : p + '.twig',
-        p.endsWith('.html.twig') ? p : p + '.html.twig'
-      ]);
+      // For paths starting with "components/", also try relative to parent directory
+      if (templateName.startsWith('components/')) {
+        const parentDir = path.dirname(currentDir);
+        possiblePaths.unshift(path.resolve(parentDir, templateName));
+
+        // Also try without the "components/" prefix if we're already in components directory
+        if (currentDir.endsWith('components')) {
+          const justFilename = templateName.replace('components/', '');
+          possiblePaths.unshift(path.resolve(currentDir, justFilename));
+        }
+      }
+
+      // Add file extensions if not present
+      const pathsWithExtension = possiblePaths.flatMap(p => {
+        const variants = [p];
+        if (!p.endsWith('.twig') && !p.endsWith('.html.twig')) {
+          variants.push(p + '.twig');
+          variants.push(p + '.html.twig');
+        }
+        return variants;
+      });
+
+      connection.console.log(`Trying paths: ${pathsWithExtension.slice(0, 5).join(', ')}...`);
 
       for (const templatePath of pathsWithExtension) {
         if (fs.existsSync(templatePath)) {
+          connection.console.log(`Found template at: ${templatePath}`);
           return templatePath;
         }
       }
+
+      connection.console.log(`Template "${templateName}" not found in any of the ${pathsWithExtension.length} possible paths`);
     } catch (error) {
       connection.console.error(`Error resolving template path: ${error}`);
     }
     return null;
   }
+
+  findBlockInTemplate(templatePath: string, blockName: string): Range | null {
+    try {
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const doc = TextDocument.create(
+        URI.file(templatePath).toString(),
+        'twig',
+        1,
+        content
+      );
+      const template = this.parse(doc);
+      return template.blocks[blockName] || null;
+    } catch (error) {
+      connection.console.error(`Error reading template ${templatePath}: ${error}`);
+      return null;
+    }
+  }
+
+  getAllTemplateFiles(): string[] {
+    const templates: string[] = [];
+    const searchDirs = [
+      // Add the examples directory for our test case
+      path.join(this.workspaceRoot, 'examples'),
+      // Standard Twig template directories
+      path.join(this.workspaceRoot, 'templates'),
+      path.join(this.workspaceRoot, 'views'),
+      path.join(this.workspaceRoot, 'src/templates'),
+      path.join(this.workspaceRoot, 'app/Resources/views'),
+      path.join(this.workspaceRoot, 'public/templates'),
+      path.join(this.workspaceRoot, 'web/templates'),
+      path.join(this.workspaceRoot, 'assets/templates'),
+      // Also add the workspace root itself
+      this.workspaceRoot
+    ];
+
+    for (const dir of searchDirs) {
+      if (fs.existsSync(dir)) {
+        this.findTwigFiles(dir, templates);
+      }
+    }
+
+    return templates;
+  }
+
+  private findTwigFiles(dir: string, templates: string[]): void {
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          this.findTwigFiles(fullPath, templates);
+        } else if (entry.name.endsWith('.twig') || entry.name.endsWith('.html.twig')) {
+          templates.push(fullPath);
+        }
+      }
+    } catch (error) {
+      // Ignore errors when reading directories
+    }
+  }
+
+  findBlockDefinition(blockName: string, document: TextDocument): Location | null {
+    const template = this.parse(document);
+
+    // First check if the block is defined in the current template
+    if (template.blocks[blockName]) {
+      return Location.create(
+        document.uri,
+        template.blocks[blockName]
+      );
+    }
+
+    // Then check parent templates
+    if (template.extends) {
+      const parentPath = this.resolveTemplatePath(template.extends, document.uri);
+      if (parentPath) {
+        const blockRange = this.findBlockInTemplate(parentPath, blockName);
+        if (blockRange) {
+          return Location.create(
+            URI.file(parentPath).toString(),
+            blockRange
+          );
+        }
+      }
+    }
+
+    return null;
+  }
+
+  findVariableDefinition(variableName: string, document: TextDocument): Location | null {
+    const template = this.parse(document);
+
+    // Check if variable is defined in current template (set statements, for loops)
+    if (template.variables[variableName] && template.variables[variableName].length > 0) {
+      // Return the first definition
+      return Location.create(
+        document.uri,
+        template.variables[variableName][0]
+      );
+    }
+
+    // For now, we don't have a way to trace variables across templates
+    // This would require more complex analysis of the template context
+    return null;
+  }
+
+  // Helper method to search for blocks in inheritance chain
+  private findBlockInInheritanceChain(blockName: string, templatePath: string, visited: Set<string> = new Set()): { path: string; range: Range } | null {
+    if (visited.has(templatePath)) {
+      return null; // Prevent infinite recursion
+    }
+    visited.add(templatePath);
+
+    try {
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const doc = TextDocument.create(
+        URI.file(templatePath).toString(),
+        'twig',
+        1,
+        content
+      );
+      const template = this.parse(doc);
+
+      // Check if block exists in this template
+      if (template.blocks[blockName]) {
+        return { path: templatePath, range: template.blocks[blockName] };
+      }
+
+      // Check parent template
+      if (template.extends) {
+        const parentPath = this.resolveTemplatePath(template.extends, URI.file(templatePath).toString());
+        if (parentPath) {
+          return this.findBlockInInheritanceChain(blockName, parentPath, visited);
+        }
+      }
+    } catch (error) {
+      connection.console.error(`Error reading template ${templatePath}: ${error}`);
+    }
+
+    return null;
+  }
+
+  getWorkspaceRoot(): string {
+    return this.workspaceRoot;
+  }
+
+  getBlocksFromParentTemplates(templateName: string, currentDocumentUri: string): string[] {
+    const blocks: string[] = [];
+    const visited = new Set<string>();
+    let currentTemplate: string | undefined = templateName;
+
+    while (currentTemplate && !visited.has(currentTemplate)) {
+      visited.add(currentTemplate);
+
+      const templatePath = this.resolveTemplatePath(currentTemplate, currentDocumentUri);
+      if (!templatePath) {
+        break;
+      }
+
+      try {
+        const content = fs.readFileSync(templatePath, 'utf8');
+        const doc = TextDocument.create(
+          URI.file(templatePath).toString(),
+          'twig',
+          1,
+          content
+        );
+        const template = this.parse(doc);
+
+        // Add all blocks from this template
+        Object.keys(template.blocks).forEach(blockName => {
+          if (!blocks.includes(blockName)) {
+            blocks.push(blockName);
+          }
+        });
+
+        currentTemplate = template.extends;
+      } catch (error) {
+        connection.console.error(`Error reading template ${templatePath}: ${error}`);
+        break;
+      }
+    }
+
+    return blocks;
+  }
+
+  // Completion support
+  getAllTemplateNames(): string[] {
+    const templates: string[] = [];
+    const searchDirs = [
+      path.join(this.workspaceRoot, 'templates'),
+      path.join(this.workspaceRoot, 'views'),
+      path.join(this.workspaceRoot, 'src/templates'),
+      path.join(this.workspaceRoot, 'app/Resources/views'),
+      path.join(this.workspaceRoot, 'public/templates'),
+      path.join(this.workspaceRoot, 'web/templates'),
+      path.join(this.workspaceRoot, 'assets/templates'),
+    ];
+
+    for (const dir of searchDirs) {
+      if (fs.existsSync(dir)) {
+        this.findTwigFiles(dir, templates);
+      }
+    }
+
+    return templates.map(t => path.basename(t, path.extname(t)));
+  }
 }
 
 let parser: TwigParser;
 
-// Initialize parser when workspace folders are available
-connection.onInitialized(() => {
-  connection.workspace.getWorkspaceFolders().then(folders => {
-    if (folders && folders.length > 0) {
-      const workspaceRoot = URI.parse(folders[0].uri).fsPath;
-      parser = new TwigParser(workspaceRoot);
-    }
-  });
-});
-
 // Go to Definition handler
 connection.onDefinition((params: TextDocumentPositionParams): Definition | null => {
+  connection.console.log(`Go to Definition request for ${params.textDocument.uri} at ${params.position.line}:${params.position.character}`);
+
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !parser) {
+    connection.console.log(`Document or parser not available. Document: ${!!document}, Parser: ${!!parser}`);
+    return null;
+  }
+
+  const twigMatch = parser.findTwigMatchAtPosition(document, params.position);
+  if (!twigMatch) {
+    connection.console.log(`No Twig match found at position ${params.position.line}:${params.position.character}`);
+    return null;
+  }
+
+  connection.console.log(`Found Twig match: type=${twigMatch.type}, name=${twigMatch.name}`);
+
+  switch (twigMatch.type) {
+    case 'extends':
+    case 'include':
+      if (twigMatch.templateName) {
+        const templatePath = parser.resolveTemplatePath(twigMatch.templateName, document.uri);
+        if (templatePath) {
+          return Location.create(
+            URI.file(templatePath).toString(),
+            Range.create(Position.create(0, 0), Position.create(0, 0))
+          );
+        }
+      }
+      break;
+
+    case 'block':
+      // For block definitions, try to find the same block in parent template
+      const template = parser.parse(document);
+      if (template.extends) {
+        const parentPath = parser.resolveTemplatePath(template.extends, document.uri);
+        if (parentPath) {
+          const blockRange = parser.findBlockInTemplate(parentPath, twigMatch.name);
+          if (blockRange) {
+            return Location.create(
+              URI.file(parentPath).toString(),
+              blockRange
+            );
+          }
+        }
+      }
+      break;
+
+    case 'block_reference':
+      // For block() function calls, find the block definition
+      return parser.findBlockDefinition(twigMatch.name, document);
+
+    case 'parent_call':
+      // For parent() calls, find the parent template's block
+      const currentTemplate = parser.parse(document);
+      if (currentTemplate.extends && twigMatch.blockName) {
+        const parentPath = parser.resolveTemplatePath(currentTemplate.extends, document.uri);
+        if (parentPath) {
+          const blockRange = parser.findBlockInTemplate(parentPath, twigMatch.blockName);
+          if (blockRange) {
+            return Location.create(
+              URI.file(parentPath).toString(),
+              blockRange
+            );
+          }
+        }
+      }
+      break;
+
+    case 'variable':
+      // For variables, try to find their definition in the current template or parent templates
+      return parser.findVariableDefinition(twigMatch.name, document);
+  }
+
+  return null;
+});
+
+// Hover handler - provides information about Twig elements
+connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const document = documents.get(params.textDocument.uri);
   if (!document || !parser) {
     return null;
   }
 
-  const text = document.getText();
-  const offset = document.offsetAt(params.position);
-
-  // Check if we're in an extends statement
-  const extendsRegex = /\{%\s*extends\s+['""]([^'"]*)['"]\s*%\}/g;
-  let match;
-  while ((match = extendsRegex.exec(text)) !== null) {
-    const start = match.index + match[0].indexOf(match[1]);
-    const end = start + match[1].length;
-
-    if (offset >= start && offset <= end) {
-      const templatePath = parser.resolveTemplatePath(match[1], document.uri);
-      if (templatePath) {
-        return Location.create(
-          URI.file(templatePath).toString(),
-          Range.create(Position.create(0, 0), Position.create(0, 0))
-        );
-      }
-    }
+  const twigMatch = parser.findTwigMatchAtPosition(document, params.position);
+  if (!twigMatch) {
+    return null;
   }
 
-  // Check if we're in an include statement
-  const includeRegex = /\{%\s*include\s+['""]([^'"]*)['"]/g;
-  while ((match = includeRegex.exec(text)) !== null) {
-    const start = match.index + match[0].indexOf(match[1]);
-    const end = start + match[1].length;
+  let hoverContent: MarkupContent | null = null;
 
-    if (offset >= start && offset <= end) {
-      const templatePath = parser.resolveTemplatePath(match[1], document.uri);
-      if (templatePath) {
-        return Location.create(
-          URI.file(templatePath).toString(),
-          Range.create(Position.create(0, 0), Position.create(0, 0))
-        );
-      }
-    }
-  }
+  switch (twigMatch.type) {
+    case 'extends':
+      const extendsPath = parser.resolveTemplatePath(twigMatch.name, document.uri);
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: `**Extends Template**: \`${twigMatch.name}\`\n\n` +
+               `Inherits from parent template.\n\n` +
+               (extendsPath ? `**Resolved Path**: \`${extendsPath}\`` : '**Path not found**')
+      };
+      break;
 
-  // Check if we're in a block reference
-  const blockRegex = /\{%\s*block\s+(\w+)\s*%\}/g;
-  while ((match = blockRegex.exec(text)) !== null) {
-    const start = match.index + match[0].indexOf(match[1]);
-    const end = start + match[1].length;
+    case 'include':
+      const includePath = parser.resolveTemplatePath(twigMatch.name, document.uri);
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: `**Include Template**: \`${twigMatch.name}\`\n\n` +
+               `Includes the content of another template.\n\n` +
+               (includePath ? `**Resolved Path**: \`${includePath}\`` : '**Path not found**')
+      };
+      break;
 
-    if (offset >= start && offset <= end) {
-      const blockName = match[1];
+    case 'block':
       const template = parser.parse(document);
+      let blockInfo = `**Block**: \`${twigMatch.name}\`\n\n` +
+                     `Defines a block that can be overridden in child templates.`;
 
-      // If this template extends another, look for the block in the parent
       if (template.extends) {
         const parentPath = parser.resolveTemplatePath(template.extends, document.uri);
         if (parentPath) {
-          try {
-            const parentContent = fs.readFileSync(parentPath, 'utf8');
-            const parentDoc = TextDocument.create(
-              URI.file(parentPath).toString(),
-              'twig',
-              1,
-              parentContent
-            );
-            const parentTemplate = parser.parse(parentDoc);
-
-            if (parentTemplate.blocks[blockName]) {
-              return Location.create(
-                URI.file(parentPath).toString(),
-                parentTemplate.blocks[blockName]
-              );
-            }
-          } catch (error) {
-            connection.console.error(`Error reading parent template: ${error}`);
+          const parentBlockRange = parser.findBlockInTemplate(parentPath, twigMatch.name);
+          if (parentBlockRange) {
+            blockInfo += `\n\n**Overrides block in**: \`${template.extends}\``;
           }
         }
+      }
+
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: blockInfo
+      };
+      break;
+
+    case 'block_reference':
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: `**Block Reference**: \`${twigMatch.name}\`\n\n` +
+               `References a block defined in this template or parent templates.`
+      };
+      break;
+
+    case 'parent_call':
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: `**Parent Call**\n\n` +
+               `Calls the parent template's version of the current block.\n\n` +
+               (twigMatch.blockName ? `**Current Block**: \`${twigMatch.blockName}\`` : '')
+      };
+      break;
+
+    case 'variable':
+      const varTemplate = parser.parse(document);
+      let varInfo = `**Variable**: \`${twigMatch.name}\`\n\n`;
+
+      if (varTemplate.variables[twigMatch.name]) {
+        const occurrences = varTemplate.variables[twigMatch.name].length;
+        varInfo += `**Occurrences in template**: ${occurrences}`;
+      }
+
+      hoverContent = {
+        kind: MarkupKind.Markdown,
+        value: varInfo
+      };
+      break;
+  }
+
+  if (hoverContent) {
+    return {
+      contents: hoverContent,
+      range: twigMatch.range
+    };
+  }
+
+  return null;
+});
+
+// Completion handler - provides auto-completion for templates and blocks
+connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !parser) {
+    connection.console.log('Completion: Document or parser not available');
+    return [];
+  }
+
+  const text = document.getText();
+  const offset = document.offsetAt(params.position);
+  const lineText = text.split('\n')[params.position.line];
+  const beforeCursor = lineText.substring(0, params.position.character);
+
+  connection.console.log(`Completion request at ${params.position.line}:${params.position.character}, beforeCursor: "${beforeCursor}"`);
+
+  const completions: CompletionItem[] = [];
+
+  // Template completion for extends and include statements
+  const templateRegex = /\{%\s*(?:extends|include)\s+['"][^'"]*$/;
+  const isTemplateCompletion = templateRegex.test(beforeCursor);
+  connection.console.log(`Template completion test: ${isTemplateCompletion}, regex: ${templateRegex}, beforeCursor: "${beforeCursor}"`);
+
+  if (isTemplateCompletion) {
+    connection.console.log('Detected template completion context');
+    const templates = parser.getAllTemplateFiles();
+    connection.console.log(`Found ${templates.length} template files: ${templates.slice(0, 3).join(', ')}...`);
+
+    connection.console.log(`Found ${templates.length} template files`);
+
+    const workspaceRoot = parser.getWorkspaceRoot();
+    const currentDir = path.dirname(URI.parse(document.uri).fsPath);
+    connection.console.log(`Current dir: ${currentDir}, Workspace root: ${workspaceRoot}`);
+
+    for (const templatePath of templates) {
+      const relativePath = path.relative(workspaceRoot, templatePath);
+      const templateName = relativePath.replace(/\\/g, '/'); // Normalize path separators
+      connection.console.log(`Processing template: ${templatePath} -> ${templateName}`);
+
+      // Also add relative path from current directory
+      const relativeFromCurrent = path.relative(currentDir, templatePath);
+      const currentDirName = relativeFromCurrent.replace(/\\/g, '/');
+
+      completions.push({
+        label: templateName,
+        kind: CompletionItemKind.File,
+        detail: 'Twig Template',
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `Template file: \`${templatePath}\``
+        },
+        insertText: templateName
+      });
+
+      // Add same-directory files without path prefix
+      if (path.dirname(templatePath) === currentDir) {
+        const justFilename = path.basename(templatePath);
+        connection.console.log(`Adding same-directory file: ${justFilename}`);
+        completions.push({
+          label: justFilename,
+          kind: CompletionItemKind.File,
+          detail: 'Twig Template (same directory)',
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `Template file: \`${templatePath}\` (relative to current)`
+          },
+          insertText: justFilename
+        });
+      }
+    }
+
+    connection.console.log(`Generated ${completions.length} template completions`);
+  }
+
+  // Block completion for block() function calls
+  if (beforeCursor.match(/\{\{\s*block\(\s*['"][^'"]*$/)) {
+    const template = parser.parse(document);
+    const availableBlocks = new Set<string>();
+
+    // Add blocks from current template
+    Object.keys(template.blocks).forEach(blockName => {
+      availableBlocks.add(blockName);
+    });
+
+    // Add blocks from parent templates
+    if (template.extends) {
+      const parentBlocks = parser.getBlocksFromParentTemplates(template.extends, document.uri);
+      parentBlocks.forEach(blockName => availableBlocks.add(blockName));
+    }
+
+    availableBlocks.forEach(blockName => {
+      completions.push({
+        label: blockName,
+        kind: CompletionItemKind.Property,
+        detail: 'Twig Block',
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `Block: \`${blockName}\``
+        },
+        insertText: blockName
+      });
+    });
+  }
+
+  // Variable completion
+  if (beforeCursor.match(/\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*$/)) {
+    const template = parser.parse(document);
+    const availableVars = new Set<string>();
+
+    // Add variables from current template
+    Object.keys(template.variables).forEach(varName => {
+      availableVars.add(varName);
+    });
+
+    // Add common Twig global variables
+    const globalVars = ['app', 'dump', '_context', '_charset', '_locale'];
+    globalVars.forEach(varName => availableVars.add(varName));
+
+    availableVars.forEach(varName => {
+      completions.push({
+        label: varName,
+        kind: CompletionItemKind.Variable,
+        detail: 'Twig Variable',
+        insertText: varName
+      });
+    });
+  }
+
+  // Twig tag completion
+  if (beforeCursor.match(/\{%\s*[a-zA-Z]*$/)) {
+    const twigTags = [
+      'block', 'endblock', 'extends', 'include', 'if', 'endif', 'else', 'elseif',
+      'for', 'endfor', 'set', 'macro', 'endmacro', 'import', 'from', 'use',
+      'filter', 'endfilter', 'spaceless', 'endspaceless', 'autoescape', 'endautoescape',
+      'raw', 'endraw', 'verbatim', 'endverbatim', 'with', 'endwith'
+    ];
+
+    twigTags.forEach(tag => {
+      completions.push({
+        label: tag,
+        kind: CompletionItemKind.Keyword,
+        detail: 'Twig Tag',
+        insertText: tag
+      });
+    });
+  }
+
+  connection.console.log(`Returning ${completions.length} completions`);
+  return completions;
+});
+
+// Document validation - provides diagnostics for Twig templates
+async function validateTwigDocument(textDocument: TextDocument): Promise<void> {
+  if (!parser) {
+    return;
+  }
+
+  const text = textDocument.getText();
+  const diagnostics: Diagnostic[] = [];
+  const template = parser.parse(textDocument);
+
+  // Check if extended template exists
+  if (template.extends) {
+    const parentPath = parser.resolveTemplatePath(template.extends, textDocument.uri);
+    if (!parentPath) {
+      const extendsRegex = /\{%\s*extends\s+['"]([^'"]*)['"]\s*%\}/g;
+      let match;
+      while ((match = extendsRegex.exec(text)) !== null) {
+        const start = textDocument.positionAt(match.index + match[0].indexOf(match[1]));
+        const end = textDocument.positionAt(match.index + match[0].indexOf(match[1]) + match[1].length);
+
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: Range.create(start, end),
+          message: `Template '${template.extends}' not found`,
+          source: 'twig'
+        });
       }
     }
   }
 
-  return null;
+  // Check if included templates exist
+  for (const includedTemplate of template.includes) {
+    const includePath = parser.resolveTemplatePath(includedTemplate, textDocument.uri);
+    if (!includePath) {
+      const includeRegex = new RegExp(`\\{%\\s*include\\s+['"]${includedTemplate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`, 'g');
+      let match;
+      while ((match = includeRegex.exec(text)) !== null) {
+        const templateStart = match[0].indexOf(includedTemplate);
+        const start = textDocument.positionAt(match.index + templateStart);
+        const end = textDocument.positionAt(match.index + templateStart + includedTemplate.length);
+
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: Range.create(start, end),
+          message: `Template '${includedTemplate}' not found`,
+          source: 'twig'
+        });
+      }
+    }
+  }
+
+  // Check for block references that don't exist
+  for (const [blockName, ranges] of Object.entries(template.blockReferences)) {
+    let blockExists = false;
+
+    // Check if block exists in current template
+    if (template.blocks[blockName]) {
+      blockExists = true;
+    }
+
+    // Check if block exists in parent templates
+    if (!blockExists && template.extends) {
+      const parentBlocks = parser.getBlocksFromParentTemplates(template.extends, textDocument.uri);
+      if (parentBlocks.includes(blockName)) {
+        blockExists = true;
+      }
+    }
+
+    if (!blockExists) {
+      for (const range of ranges) {
+        diagnostics.push({
+          severity: DiagnosticSeverity.Warning,
+          range: range,
+          message: `Block '${blockName}' is not defined`,
+          source: 'twig'
+        });
+      }
+    }
+  }
+
+  // Check for unclosed blocks
+  const blockStarts = text.match(/\{%\s*block\s+\w+\s*%\}/g) || [];
+  const blockEnds = text.match(/\{%\s*endblock(?:\s+\w+)?\s*%\}/g) || [];
+
+  if (blockStarts.length !== blockEnds.length) {
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      message: `Mismatched block tags: ${blockStarts.length} block starts, ${blockEnds.length} block ends`,
+      source: 'twig'
+    });
+  }
+
+  // Send diagnostics to the client
+  connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+// Listen for document changes and validate
+documents.onDidChangeContent(change => {
+  validateTwigDocument(change.document);
+});
+
+documents.onDidOpen(change => {
+  validateTwigDocument(change.document);
 });
 
 // Make the text document manager listen on the connection
