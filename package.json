@@ -2,7 +2,7 @@
   "name": "twig-go-to-definition",
   "displayName": "Twig Go to Definition",
   "description": "Go to Definition support for Twig templates using Language Server Protocol",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "JosipPapez",
   "author": {
     "name": "Josip Papež",
@@ -48,7 +48,36 @@
         "scopeName": "text.html.twig",
         "path": "./syntaxes/twig.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Twig Go to Definition",
+      "properties": {
+        "twigGoToDefinition.pathResolution": {
+          "type": "string",
+          "enum": ["smart", "absolute", "relative"],
+          "default": "smart",
+          "description": "Controls how template paths are suggested in autocomplete",
+          "enumDescriptions": [
+            "Smart: Use relative paths within same top-level folder, absolute paths for cross-folder references",
+            "Absolute: Always use full paths from workspace root (e.g., 'examples/base.twig')",
+            "Relative: Always use relative paths from current file (e.g., '../base.twig')"
+          ]
+        },
+        "twigGoToDefinition.templateDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["templates", "views", "src/templates", "examples"],
+          "description": "Additional directories to search for Twig templates"
+        },
+        "twigGoToDefinition.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable error checking for missing templates and blocks"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

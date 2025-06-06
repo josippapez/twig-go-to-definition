@@ -35,7 +35,7 @@
 
     {# Test conditional includes #}
     {% if section.show_footer|default(false) %}
-        {% include "section-footer.twig" with {
+        {% include "../base.twig" with {
             'section_id': section.id,
             'section_type': section.type
         } only %}

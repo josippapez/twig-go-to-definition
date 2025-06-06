@@ -89,6 +89,11 @@ connection.onInitialized(() => {
     });
   }
 
+  // Load initial configuration
+  if (hasConfigurationCapability) {
+    updateConfiguration();
+  }
+
   // Initialize parser when workspace folders are available
   connection.workspace.getWorkspaceFolders().then(folders => {
     if (folders && folders.length > 0) {
@@ -100,6 +105,48 @@ connection.onInitialized(() => {
     }
   });
 });
+
+// Configuration change handler
+connection.onDidChangeConfiguration(change => {
+  if (hasConfigurationCapability) {
+    updateConfiguration();
+  }
+});
+
+async function updateConfiguration() {
+  try {
+    const settings = await connection.workspace.getConfiguration('twigGoToDefinition');
+    globalSettings = {
+      pathResolution: settings.pathResolution || 'smart',
+      templateDirectories: settings.templateDirectories || ['templates', 'views', 'src/templates', 'examples'],
+      diagnostics: {
+        enabled: settings.diagnostics?.enabled !== false
+      }
+    };
+    connection.console.log(`Configuration updated: pathResolution=${globalSettings.pathResolution}`);
+  } catch (error) {
+    connection.console.error(`Error updating configuration: ${error}`);
+    globalSettings = defaultSettings;
+  }
+}
+
+// Configuration interface
+interface TwigGoToDefinitionSettings {
+  pathResolution: 'smart' | 'absolute' | 'relative';
+  templateDirectories: string[];
+  diagnostics: {
+    enabled: boolean;
+  };
+}
+
+// Default settings
+const defaultSettings: TwigGoToDefinitionSettings = {
+  pathResolution: 'smart',
+  templateDirectories: ['templates', 'views', 'src/templates', 'examples'],
+  diagnostics: { enabled: true }
+};
+
+let globalSettings: TwigGoToDefinitionSettings = defaultSettings;
 
 // Twig parser and utilities
 interface TwigTemplate {
@@ -458,18 +505,15 @@ class TwigParser {
 
   getAllTemplateFiles(): string[] {
     const templates: string[] = [];
+
+    // Use configured template directories
+    const configuredDirs = globalSettings.templateDirectories.map(dir =>
+      path.join(this.workspaceRoot, dir)
+    );
+
     const searchDirs = [
-      // Add the examples directory for our test case
-      path.join(this.workspaceRoot, 'examples'),
-      // Standard Twig template directories
-      path.join(this.workspaceRoot, 'templates'),
-      path.join(this.workspaceRoot, 'views'),
-      path.join(this.workspaceRoot, 'src/templates'),
-      path.join(this.workspaceRoot, 'app/Resources/views'),
-      path.join(this.workspaceRoot, 'public/templates'),
-      path.join(this.workspaceRoot, 'web/templates'),
-      path.join(this.workspaceRoot, 'assets/templates'),
-      // Also add the workspace root itself
+      ...configuredDirs,
+      // Always include workspace root
       this.workspaceRoot
     ];
 
@@ -843,56 +887,83 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
   const completions: CompletionItem[] = [];
 
   // Template completion for extends and include statements
-  const templateRegex = /\{%\s*(?:extends|include)\s+['"][^'"]*$/;
-  const isTemplateCompletion = templateRegex.test(beforeCursor);
-  connection.console.log(`Template completion test: ${isTemplateCompletion}, regex: ${templateRegex}, beforeCursor: "${beforeCursor}"`);
-
-  if (isTemplateCompletion) {
+  if (beforeCursor.match(/\{%\s*(?:extends|include)\s+['"][^'"]*$/)) {
     connection.console.log('Detected template completion context');
     const templates = parser.getAllTemplateFiles();
     connection.console.log(`Found ${templates.length} template files: ${templates.slice(0, 3).join(', ')}...`);
-
-    connection.console.log(`Found ${templates.length} template files`);
 
     const workspaceRoot = parser.getWorkspaceRoot();
     const currentDir = path.dirname(URI.parse(document.uri).fsPath);
     connection.console.log(`Current dir: ${currentDir}, Workspace root: ${workspaceRoot}`);
 
-    for (const templatePath of templates) {
-      const relativePath = path.relative(workspaceRoot, templatePath);
-      const templateName = relativePath.replace(/\\/g, '/'); // Normalize path separators
-      connection.console.log(`Processing template: ${templatePath} -> ${templateName}`);
+    // Find the top-level directory of the current file (relative to workspace)
+    const currentRelativeDir = path.relative(workspaceRoot, currentDir);
+    const currentTopLevel = currentRelativeDir.split(path.sep)[0] || '';
 
-      // Also add relative path from current directory
-      const relativeFromCurrent = path.relative(currentDir, templatePath);
-      const currentDirName = relativeFromCurrent.replace(/\\/g, '/');
+    connection.console.log(`Current relative dir: ${currentRelativeDir}, top level: ${currentTopLevel}`);    for (const templatePath of templates) {
+      const templateDir = path.dirname(templatePath);
+      const templateRelativeDir = path.relative(workspaceRoot, templateDir);
+      const templateTopLevel = templateRelativeDir.split(path.sep)[0] || '';
+      const filename = path.basename(templatePath);
 
+      connection.console.log(`Processing template: ${templatePath}`);
+      connection.console.log(`  Template dir: ${templateDir}, relative: ${templateRelativeDir}, top level: ${templateTopLevel}`);
+
+      let suggestion: string;
+      let detail: string;
+      let sortText: string;
+
+      if (globalSettings.pathResolution === 'absolute') {
+        // Always use path from workspace root
+        const absolutePath = path.relative(workspaceRoot, templatePath).replace(/\\/g, '/');
+        suggestion = absolutePath;
+        detail = `Twig Template (${templateTopLevel || 'root'})`;
+        sortText = templateDir === currentDir ? '1' + suggestion : '2' + suggestion;
+      } else if (globalSettings.pathResolution === 'relative') {
+        // Always use relative path from current file
+        const relativePath = path.relative(currentDir, templatePath).replace(/\\/g, '/');
+        suggestion = relativePath;
+        detail = 'Twig Template (relative)';
+        sortText = templateDir === currentDir ? '1' + suggestion : '2' + suggestion;
+      } else {
+        // Smart path resolution (default behavior)
+        if (templateDir === currentDir) {
+          // Same directory - just use filename
+          suggestion = filename;
+          detail = 'Twig Template (same directory)';
+          sortText = '1' + suggestion;
+        } else if (currentTopLevel && templateTopLevel === currentTopLevel) {
+          // Same top-level directory but different subdirectory
+          const relativePath = path.relative(currentDir, templatePath).replace(/\\/g, '/');
+          suggestion = relativePath;
+          detail = `Twig Template (${templateTopLevel})`;
+          sortText = '2' + suggestion;
+        } else if (templateTopLevel) {
+          // Different top-level directory - use path from top-level
+          const fromTopLevel = path.relative(workspaceRoot, templatePath).replace(/\\/g, '/');
+          suggestion = fromTopLevel;
+          detail = `Twig Template (${templateTopLevel})`;
+          sortText = '3' + suggestion;
+        } else {
+          // Files in workspace root
+          suggestion = filename;
+          detail = 'Twig Template (root)';
+          sortText = '1' + suggestion;
+        }
+      }
+
+      connection.console.log(`  Adding completion: ${suggestion} (${detail})`);
       completions.push({
-        label: templateName,
+        label: suggestion,
         kind: CompletionItemKind.File,
-        detail: 'Twig Template',
+        detail: detail,
         documentation: {
           kind: MarkupKind.Markdown,
           value: `Template file: \`${templatePath}\``
         },
-        insertText: templateName
+        insertText: suggestion,
+        sortText: sortText
       });
-
-      // Add same-directory files without path prefix
-      if (path.dirname(templatePath) === currentDir) {
-        const justFilename = path.basename(templatePath);
-        connection.console.log(`Adding same-directory file: ${justFilename}`);
-        completions.push({
-          label: justFilename,
-          kind: CompletionItemKind.File,
-          detail: 'Twig Template (same directory)',
-          documentation: {
-            kind: MarkupKind.Markdown,
-            value: `Template file: \`${templatePath}\` (relative to current)`
-          },
-          insertText: justFilename
-        });
-      }
     }
 
     connection.console.log(`Generated ${completions.length} template completions`);
