@@ -699,6 +699,52 @@ class TwigParser {
   }
 }
 
+// Helper function to read template content and metadata for hover previews
+function getTemplatePreview(templatePath: string): { content: string; metadata: string } | null {
+  try {
+    // Check if file exists and get stats
+    const stats = fs.statSync(templatePath);
+    const fileSizeKB = (stats.size / 1024).toFixed(1);
+    const lastModified = stats.mtime.toLocaleDateString();
+
+    // Don't read very large files (over 100KB)
+    if (stats.size > 100 * 1024) {
+      return {
+        content: '*File too large to preview*',
+        metadata: `**Size**: ${fileSizeKB} KB | **Modified**: ${lastModified}`
+      };
+    }
+
+    // Read file content
+    const content = fs.readFileSync(templatePath, 'utf-8');
+
+    // Get first few lines for preview (max 10 lines or 500 characters)
+    const lines = content.split('\n');
+    const previewLines = lines.slice(0, 10);
+    let preview = previewLines.join('\n');
+
+    // Truncate if too long
+    if (preview.length > 500) {
+      preview = preview.substring(0, 500) + '...';
+    }
+
+    // Add "..." if there are more lines
+    if (lines.length > 10) {
+      preview += '\n...';
+    }
+
+    return {
+      content: preview,
+      metadata: `**Size**: ${fileSizeKB} KB | **Lines**: ${lines.length} | **Modified**: ${lastModified}`
+    };
+  } catch (error) {
+    return {
+      content: '*Could not read file*',
+      metadata: '*File information unavailable*'
+    };
+  }
+}
+
 let parser: TwigParser;
 
 // Fuzzy matching utility function
@@ -816,21 +862,49 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   switch (twigMatch.type) {
     case 'extends':
       const extendsPath = parser.resolveTemplatePath(twigMatch.name, document.uri);
+      let extendsContent = `**Extends Template**: \`${twigMatch.name}\`\n\n` +
+                          `Inherits from parent template.\n\n`;
+
+      if (extendsPath) {
+        extendsContent += `**Resolved Path**: \`${extendsPath}\`\n\n`;
+
+        // Add template preview
+        const preview = getTemplatePreview(extendsPath);
+        if (preview) {
+          extendsContent += `**Template Preview:**\n\`\`\`twig\n${preview.content}\n\`\`\`\n\n`;
+          extendsContent += preview.metadata;
+        }
+      } else {
+        extendsContent += '**Path not found**';
+      }
+
       hoverContent = {
         kind: MarkupKind.Markdown,
-        value: `**Extends Template**: \`${twigMatch.name}\`\n\n` +
-               `Inherits from parent template.\n\n` +
-               (extendsPath ? `**Resolved Path**: \`${extendsPath}\`` : '**Path not found**')
+        value: extendsContent
       };
       break;
 
     case 'include':
       const includePath = parser.resolveTemplatePath(twigMatch.name, document.uri);
+      let includeContent = `**Include Template**: \`${twigMatch.name}\`\n\n` +
+                          `Includes the content of another template.\n\n`;
+
+      if (includePath) {
+        includeContent += `**Resolved Path**: \`${includePath}\`\n\n`;
+
+        // Add template preview
+        const preview = getTemplatePreview(includePath);
+        if (preview) {
+          includeContent += `**Template Preview:**\n\`\`\`twig\n${preview.content}\n\`\`\`\n\n`;
+          includeContent += preview.metadata;
+        }
+      } else {
+        includeContent += '**Path not found**';
+      }
+
       hoverContent = {
         kind: MarkupKind.Markdown,
-        value: `**Include Template**: \`${twigMatch.name}\`\n\n` +
-               `Includes the content of another template.\n\n` +
-               (includePath ? `**Resolved Path**: \`${includePath}\`` : '**Path not found**')
+        value: includeContent
       };
       break;
 

@@ -2,47 +2,54 @@
 
 This document outlines potential features and improvements for the Twig Go to Definition extension to enhance developer experience and productivity.
 
-## 🚀 Enhanced Autocomplete & IntelliSense
+## ✅ **Already Implemented Features (v0.0.7)**
 
-### Filter Completion on Typing
-- **Description**: Filter autocomplete suggestions based on partial typing
-- **Example**: Typing "sec" shows "section-footer.twig", "section-header.twig", etc.
-- **Benefit**: Faster template discovery and selection
-- **Priority**: High
-- **Implementation**: Fuzzy matching in completion provider
+### Enhanced Autocomplete & IntelliSense
+- ✅ **Filter Completion on Typing** - Smart filtering with fuzzy matching
+- ✅ **Cross-directory Template Discovery** - Find templates in any subdirectory
+- ✅ **Smart Scoring** - Relevance-based completion ordering
+
+### Advanced Navigation Features
+- ✅ **Find All References** - Right-click to find all usages of templates, blocks, variables
+- ✅ **Template Outline View** - Document symbol provider showing template structure
+- ✅ **Go to Definition** - Navigate to templates, blocks, variables
+
+### Configuration & Settings
+- ✅ **Configurable Path Resolution** - Smart, absolute, or relative path suggestions
+- ✅ **Custom Template Directories** - Configure search directories
+- ✅ **Settings Integration** - Full VS Code settings integration
+
+### Developer Experience
+- ✅ **Hover Information** - Detailed template, block, and variable information
+- ✅ **Real-time Diagnostics** - Template validation and error detection
+- ✅ **Enhanced Error Handling** - Robust parsing with validation
+
+---
+
+## 🚀 **Remaining High-Priority Features**
 
 ### Template Preview in Hover
 - **Description**: Show template content preview in hover documentation
 - **Example**: Hovering over template name shows first few lines of content
 - **Benefit**: Quick understanding of template purpose without opening file
-- **Priority**: Medium
+- **Priority**: High
 - **Implementation**: Read file content and format for markdown display
 
-### Template Metadata in Hover
-- **Description**: Display template metadata (size, last modified, author) in hover info
-- **Example**: "Modified: 2 hours ago, Size: 1.2KB, Author: John Doe"
-- **Benefit**: Better context about template files
-- **Priority**: Low
-- **Implementation**: File system stats integration
-
-### Template-Specific Snippets
-- **Description**: Smart snippets for common Twig patterns
-- **Examples**:
-  - `block` → `{% block name %}{% endblock %}`
-  - `extends` → `{% extends "template.twig" %}`
-  - `include` → `{% include "template.twig" %}`
-- **Benefit**: Faster template creation
-- **Priority**: Medium
-- **Implementation**: VS Code snippet contributions
-
-## 🧭 Advanced Navigation Features
-
-### Find All References
-- **Description**: Show all places where a template, block, or variable is used
-- **Example**: Right-click on template name → "Find All References"
-- **Benefit**: Essential for refactoring and understanding code dependencies
+### Rename Template Refactoring
+- **Description**: Rename template file and update all references automatically
+- **Example**: F2 on template → renames file and updates all includes/extends
+- **Benefit**: Safe refactoring without breaking references
 - **Priority**: High
-- **Implementation**: Document symbol provider with workspace search
+- **Implementation**: Rename provider with workspace-wide find/replace
+
+### Circular Dependency Detection
+- **Description**: Detect circular template inheritance chains
+- **Example**: Error when template A extends B which extends A
+- **Benefit**: Prevent runtime errors and infinite loops
+- **Priority**: High
+- **Implementation**: Graph traversal algorithm in parser
+
+## 🧭 **Enhanced Navigation Features**
 
 ### Template Dependency Tree
 - **Description**: Visual representation of template inheritance and includes
@@ -51,13 +58,6 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Medium
 - **Implementation**: Custom webview with template graph
 
-### Breadcrumb Navigation
-- **Description**: Show current template hierarchy in status bar or breadcrumbs
-- **Example**: "base.twig > layout.twig > page.twig"
-- **Benefit**: Quick understanding of current context
-- **Priority**: Low
-- **Implementation**: Status bar integration
-
 ### Quick Template Switch
 - **Description**: Command palette to quickly switch between related templates
 - **Example**: Cmd+P → type template name for instant navigation
@@ -65,21 +65,14 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Medium
 - **Implementation**: Custom command with template indexing
 
-### Template Outline View
-- **Description**: Tree view showing all blocks, variables, includes in current template
-- **Example**: Sidebar panel with expandable template structure
-- **Benefit**: Quick navigation within large templates
-- **Priority**: High
-- **Implementation**: Document symbol provider with custom tree view
+### Template Workspace View
+- **Description**: Dedicated sidebar view for template navigation
+- **Example**: Tree view of all templates organized by directory
+- **Benefit**: Better project overview and navigation
+- **Priority**: Medium
+- **Implementation**: Custom tree view provider
 
-## 🔧 Refactoring & Code Actions
-
-### Rename Template
-- **Description**: Rename template file and update all references automatically
-- **Example**: F2 on template → renames file and updates all includes/extends
-- **Benefit**: Safe refactoring without breaking references
-- **Priority**: High
-- **Implementation**: Rename provider with workspace-wide find/replace
+## 🔧 **Refactoring & Code Actions**
 
 ### Extract Block
 - **Description**: Extract selected code into a new named block
@@ -95,13 +88,6 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Medium
 - **Implementation**: Code action with file creation and reference updates
 
-### Organize Includes
-- **Description**: Sort and group include statements automatically
-- **Example**: Sort includes alphabetically or by directory
-- **Benefit**: Cleaner, more maintainable template structure
-- **Priority**: Low
-- **Implementation**: Document formatting provider
-
 ### Convert Path Format
 - **Description**: Quick action to convert between relative/absolute paths
 - **Example**: Right-click on path → "Convert to Absolute/Relative"
@@ -109,7 +95,7 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Low
 - **Implementation**: Code action with path transformation
 
-## 🔍 Advanced Diagnostics & Validation
+## 🔍 **Advanced Diagnostics & Validation**
 
 ### Unused Template Detection
 - **Description**: Detect templates that are never included or extended
@@ -117,13 +103,6 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Benefit**: Clean up unused code and reduce project bloat
 - **Priority**: Medium
 - **Implementation**: Workspace analysis with reference counting
-
-### Circular Dependency Detection
-- **Description**: Detect circular template inheritance chains
-- **Example**: Error when template A extends B which extends A
-- **Benefit**: Prevent runtime errors and infinite loops
-- **Priority**: High
-- **Implementation**: Graph traversal algorithm in parser
 
 ### Missing Variable Warnings
 - **Description**: Warn about undefined variables in templates
@@ -139,21 +118,7 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Low
 - **Implementation**: Template complexity analysis
 
-### Accessibility Validation
-- **Description**: Basic accessibility checks for HTML output
-- **Example**: Check for missing alt attributes, heading hierarchy
-- **Benefit**: Better web accessibility
-- **Priority**: Low
-- **Implementation**: HTML parsing with accessibility rules
-
-## 🛠️ Development Tools
-
-### Template Hot Reload
-- **Description**: Auto-refresh preview when templates change
-- **Example**: Live preview panel that updates on file save
-- **Benefit**: Faster development feedback loop
-- **Priority**: Medium
-- **Implementation**: File watcher with preview webview
+## 🛠️ **Development Tools**
 
 ### Template Formatter
 - **Description**: Format Twig templates with proper indentation
@@ -162,56 +127,12 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Medium
 - **Implementation**: Document formatting provider
 
-### Smart Comment Toggling
-- **Description**: Intelligent comment/uncomment for Twig syntax
-- **Example**: Toggle between `{# #}` and `{# {% block %} #}`
-- **Benefit**: Better commenting workflow
-- **Priority**: Low
-- **Implementation**: Custom comment provider
-
 ### Template Generator
 - **Description**: Scaffold new templates with boilerplate code
 - **Example**: Command to create template with basic structure
 - **Benefit**: Faster template creation
 - **Priority**: Low
 - **Implementation**: File template system
-
-### Import Organizer
-- **Description**: Auto-organize and clean up template imports/includes
-- **Example**: Sort includes, remove duplicates, group by type
-- **Benefit**: Cleaner template organization
-- **Priority**: Low
-- **Implementation**: Document formatting with include analysis
-
-## 📊 Project Management
-
-### Template Workspace View
-- **Description**: Dedicated sidebar view for template navigation
-- **Example**: Tree view of all templates organized by directory
-- **Benefit**: Better project overview and navigation
-- **Priority**: Medium
-- **Implementation**: Custom tree view provider
-
-### Template Bookmarks
-- **Description**: Bookmark frequently used templates for quick access
-- **Example**: Star templates to add to favorites list
-- **Benefit**: Faster access to important templates
-- **Priority**: Low
-- **Implementation**: Workspace state storage
-
-### Project Templates
-- **Description**: Template sets for different project types (Symfony, Craft, etc.)
-- **Example**: "Create Symfony Template Set" command
-- **Benefit**: Faster project setup
-- **Priority**: Low
-- **Implementation**: Template scaffolding system
-
-### Template Metrics
-- **Description**: Statistics about template usage and complexity
-- **Example**: Dashboard showing most used templates, inheritance depth
-- **Benefit**: Project insights and optimization opportunities
-- **Priority**: Low
-- **Implementation**: Usage tracking and analytics
 
 ## ⚙️ Enhanced Settings & Customization
 
@@ -276,13 +197,6 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Benefit**: Zero-configuration setup for common frameworks
 - **Priority**: Medium
 - **Implementation**: Project file detection and configuration
-
-### Live Preview
-- **Description**: Preview rendered templates directly in VS Code
-- **Example**: Side panel showing HTML output with test data
-- **Benefit**: Immediate visual feedback
-- **Priority**: High
-- **Implementation**: Twig rendering engine integration
 
 ### Template Linting
 - **Description**: Integration with external Twig linters
@@ -358,44 +272,75 @@ This document outlines potential features and improvements for the Twig Go to De
 - **Priority**: Low
 - **Implementation**: Keybinding contributions
 
-## 🎯 Implementation Priority
+## 🎯 **Updated Implementation Priority**
 
-### High Priority (Quick Wins)
-1. **Filter completion on typing** - Immediate UX improvement
-2. **Find all references** - Essential navigation feature
-3. **Template outline view** - Great for template understanding
-4. **Circular dependency detection** - Prevents critical errors
-5. **Incremental parsing** - Performance improvement
+### Next High Priority Features (Quick Wins)
 
-### Medium Priority (Valuable Features)
-1. **Rename template refactoring** - Important workflow feature
-2. **Template workspace view** - Better project navigation
-3. **Template hot reload** - Development experience
-4. **Multi-root workspace** - Better project support
-5. **Live preview** - Visual development aid
+1. **Template Preview in Hover** - Enhanced hover experience with content preview
+2. **Rename Template Refactoring** - Essential workflow improvement for safe refactoring
+3. **Circular Dependency Detection** - Prevents critical runtime errors
 
-### Low Priority (Nice to Have)
-1. **Template bookmarks** - Convenience feature
-2. **Accessibility validation** - Specialized use case
-3. **Template metrics** - Analytics and insights
-4. **Welcome guide** - Onboarding improvement
+### Medium Priority Features (Valuable Additions)
 
-## 💡 Implementation Notes
+1. **Template Dependency Tree** - Visual understanding of template relationships
+2. **Template Workspace View** - Better project navigation and organization
+3. **Template Hot Reload** - Development workflow enhancement
+4. **Unused Template Detection** - Code cleanup and project maintenance
+5. **Template Formatter** - Code quality and consistency
 
-- Start with features that provide immediate value to developers
-- Focus on stability and performance before adding complex features
-- Consider VS Code API limitations and capabilities
-- Maintain backward compatibility with existing configurations
-- Gather user feedback to prioritize feature development
-- Consider impact on extension size and startup time
+### Low Priority Features (Nice to Have)
+1. **Template-Specific Snippets** - Developer productivity boost
+2. **Quick Template Switch** - Navigation convenience
+3. **Extract Block Refactoring** - Advanced refactoring capability
+4. **Template Generator** - Scaffolding and boilerplate reduction
+5. **Performance Hints** - Optimization guidance
 
-## 🔄 Next Steps
+## 💡 **Implementation Recommendations**
 
-1. **User Survey**: Gather feedback on most desired features
-2. **Prototype Development**: Build proof-of-concept for high-priority features
-3. **Performance Testing**: Ensure new features don't impact performance
-4. **Documentation**: Update guides and documentation for new features
-5. **Community Feedback**: Share roadmap with users for input
+### For Next Version (0.0.8)
+Focus on **Template Preview in Hover** as it provides immediate value and enhances the existing hover functionality that's already working well.
+
+**Implementation approach**:
+- Extend existing hover provider
+- Read template file content safely (with size limits)
+- Format first few lines for markdown display
+- Add file metadata (size, last modified)
+
+### For Version 0.0.9
+Implement **Rename Template Refactoring** for safe refactoring workflows.
+
+**Implementation approach**:
+- Use VS Code's rename provider API
+- Leverage existing "Find All References" functionality
+- Update all include/extend statements
+- Handle file system operations safely
+
+### For Version 0.1.0
+Add **Circular Dependency Detection** for robustness.
+
+**Implementation approach**:
+- Extend existing template parser
+- Implement graph traversal algorithm
+- Add diagnostic provider for circular references
+- Provide clear error messages and suggestions
+
+---
+
+## 📋 **Implementation Notes**
+
+- **Performance**: All new features should maintain fast response times
+- **Backward Compatibility**: Preserve existing configurations and behavior
+- **Error Handling**: Robust error handling for file operations and parsing
+- **User Experience**: Features should integrate seamlessly with existing workflows
+- **Documentation**: Update README and guides for new features
+
+## 🔄 **Next Steps**
+
+1. **Choose Next Feature**: Start with Template Preview in Hover for immediate impact
+2. **User Feedback**: Gather input on which features are most valuable
+3. **Prototype Development**: Build proof-of-concept implementations
+4. **Testing**: Ensure new features work across different project structures
+5. **Documentation**: Update extension documentation and examples
 
 ---
 
