@@ -11,7 +11,9 @@ This extension adds intelligent navigation support for Twig templates:
 - **Parent Call Navigation**: Navigate from `{{ parent() }}` calls to the parent template's block definition
 - **Block Function Navigation**: Navigate from `{{ block('name') }}` calls to block definitions
 - **Variable References**: Navigate to variable definitions within templates
-- **Auto-completion**: Intelligent completion for template names, block names, variables, and Twig tags with configurable path resolution
+- **Auto-completion**: Intelligent completion for template names, block names, variables, and Twig tags with configurable path resolution and smart filtering
+- **Find All References**: Locate all usages of templates, blocks, and variables across your project
+- **Template Outline**: Document symbol provider showing template structure (blocks, includes, variables) in the outline view
 - **Hover Information**: Detailed information about templates, blocks, and variables on hover
 - **Diagnostics**: Real-time validation of template references and syntax
 - **Automatic File Discovery**: Intelligent resolution of template paths across common Twig project structures
@@ -27,7 +29,9 @@ This extension adds intelligent navigation support for Twig templates:
 - `{{ block('name') }}` - Navigate to block definitions
 - Variable references in `{{ variable }}` syntax
 - Variable definitions in `{% set %}` and `{% for %}` loops
-- Template and block auto-completion
+- **Find All References** - Right-click to find all usages of templates, blocks, or variables
+- **Template Outline** - View template structure in VS Code's outline panel
+- Template and block auto-completion with smart filtering
 - Real-time error detection for missing templates and blocks
 
 ## Requirements
@@ -151,6 +155,17 @@ Enable detailed logging by checking the Output panel:
 3. Trigger the feature to see detailed logs
 
 ## Release Notes
+
+### 0.0.7
+
+Quality of life improvements and enhanced navigation:
+
+- **Smart Autocomplete Filtering**: Template suggestions now filter as you type with fuzzy matching
+- **Find All References**: Right-click on templates, blocks, or variables to find all usages across your project
+- **Template Outline View**: Document symbol provider shows template structure in VS Code's outline panel
+- **Enhanced Completion Scoring**: Better sorting of autocomplete suggestions based on relevance
+- **Improved Reference Detection**: More accurate template and block reference finding
+- **Performance Optimizations**: Better handling of large template hierarchies
 
 ### 0.0.6
 

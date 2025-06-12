@@ -17,7 +17,12 @@ import {
   Position,
   Hover,
   MarkupKind,
-  MarkupContent
+  MarkupContent,
+  ReferenceParams,
+  DocumentSymbolParams,
+  DocumentSymbol,
+  SymbolKind,
+  TextEdit
 } from 'vscode-languageserver/node';
 
 import {
@@ -65,7 +70,11 @@ connection.onInitialize((params: InitializeParams) => {
       // Tell the client that this server supports go to definition
       definitionProvider: true,
       // Tell the client that this server supports hover
-      hoverProvider: true
+      hoverProvider: true,
+      // Tell the client that this server supports find references
+      referencesProvider: true,
+      // Tell the client that this server supports document symbols
+      documentSymbolProvider: true
     }
   };
   if (hasWorkspaceFolderCapability) {
@@ -692,6 +701,26 @@ class TwigParser {
 
 let parser: TwigParser;
 
+// Fuzzy matching utility function
+function fuzzyMatch(text: string, pattern: string): boolean {
+  if (pattern === '') {
+    return true;
+  }
+
+  const textLower = text.toLowerCase();
+  const patternLower = pattern.toLowerCase();
+
+  // Simple fuzzy matching: check if pattern characters appear in order
+  let patternIndex = 0;
+  for (let i = 0; i < textLower.length && patternIndex < patternLower.length; i++) {
+    if (textLower[i] === patternLower[patternIndex]) {
+      patternIndex++;
+    }
+  }
+
+  return patternIndex === patternLower.length;
+}
+
 // Go to Definition handler
 connection.onDefinition((params: TextDocumentPositionParams): Definition | null => {
   connection.console.log(`Go to Definition request for ${params.textDocument.uri} at ${params.position.line}:${params.position.character}`);
@@ -887,20 +916,24 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
   const completions: CompletionItem[] = [];
 
   // Template completion for extends and include statements
-  if (beforeCursor.match(/\{%\s*(?:extends|include)\s+['"][^'"]*$/)) {
+  const templateMatch = beforeCursor.match(/\{%\s*(?:extends|include)\s+['"]([^'"]*)$/);
+  if (templateMatch) {
     connection.console.log('Detected template completion context');
+    const partialInput = templateMatch[1]; // Get the partial input (preserve case for replacement)
+    const partialInputLower = partialInput.toLowerCase(); // For filtering
     const templates = parser.getAllTemplateFiles();
-    connection.console.log(`Found ${templates.length} template files: ${templates.slice(0, 3).join(', ')}...`);
+    connection.console.log(`Found ${templates.length} template files, filtering by: "${partialInput}"`);
 
     const workspaceRoot = parser.getWorkspaceRoot();
     const currentDir = path.dirname(URI.parse(document.uri).fsPath);
-    connection.console.log(`Current dir: ${currentDir}, Workspace root: ${workspaceRoot}`);
 
     // Find the top-level directory of the current file (relative to workspace)
     const currentRelativeDir = path.relative(workspaceRoot, currentDir);
     const currentTopLevel = currentRelativeDir.split(path.sep)[0] || '';
 
-    connection.console.log(`Current relative dir: ${currentRelativeDir}, top level: ${currentTopLevel}`);    for (const templatePath of templates) {
+    connection.console.log(`Current relative dir: ${currentRelativeDir}, top level: ${currentTopLevel}`);
+
+    for (const templatePath of templates) {
       const templateDir = path.dirname(templatePath);
       const templateRelativeDir = path.relative(workspaceRoot, templateDir);
       const templateTopLevel = templateRelativeDir.split(path.sep)[0] || '';
@@ -950,23 +983,83 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
           detail = 'Twig Template (root)';
           sortText = '1' + suggestion;
         }
+      }      // Enhanced filtering logic - match against filename, path components, and fuzzy matching
+      const baseFilename = path.basename(filename, '.twig'); // Remove .twig extension
+      const pathComponents = suggestion.split('/'); // Split path into components
+
+      let shouldInclude = false;
+      let matchScore = 0;
+
+      if (partialInput === '') {
+        // Show all templates when no input
+        shouldInclude = true;
+        matchScore = 50;
+      } else {
+        // Check various matching strategies
+        const filenameLower = filename.toLowerCase();
+        const baseFilenameLower = baseFilename.toLowerCase();
+        const suggestionLower = suggestion.toLowerCase();
+
+        // 1. Exact filename match (highest priority)
+        if (baseFilenameLower === partialInputLower || filenameLower === partialInputLower) {
+          shouldInclude = true;
+          matchScore = 100;
+        }
+        // 2. Filename starts with input
+        else if (baseFilenameLower.startsWith(partialInputLower) || filenameLower.startsWith(partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 95;
+        }
+        // 3. Filename contains input
+        else if (baseFilenameLower.includes(partialInputLower) || filenameLower.includes(partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 85;
+        }
+        // 4. Any path component matches
+        else if (pathComponents.some(component => component.toLowerCase().includes(partialInputLower))) {
+          shouldInclude = true;
+          matchScore = 80;
+        }
+        // 5. Full path starts with input
+        else if (suggestionLower.startsWith(partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 75;
+        }
+        // 6. Full path contains input
+        else if (suggestionLower.includes(partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 70;
+        }
+        // 7. Fuzzy match on filename (more lenient)
+        else if (fuzzyMatch(baseFilenameLower, partialInputLower) || fuzzyMatch(filenameLower, partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 60;
+        }
+        // 8. Fuzzy match on full path
+        else if (fuzzyMatch(suggestionLower, partialInputLower)) {
+          shouldInclude = true;
+          matchScore = 55;
+        }
       }
 
-      connection.console.log(`  Adding completion: ${suggestion} (${detail})`);
-      completions.push({
-        label: suggestion,
-        kind: CompletionItemKind.File,
-        detail: detail,
-        documentation: {
-          kind: MarkupKind.Markdown,
-          value: `Template file: \`${templatePath}\``
-        },
-        insertText: suggestion,
-        sortText: sortText
-      });
+      if (shouldInclude) {
+        connection.console.log(`  Adding completion: ${suggestion} (score: ${matchScore}, filename: ${filename})`);
+        completions.push({
+          label: suggestion,
+          kind: CompletionItemKind.File,
+          detail: detail,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `Template file: \`${templatePath}\``
+          },
+          insertText: suggestion,
+          sortText: (100 - matchScore).toString().padStart(3, '0') + sortText, // Higher score = earlier in list
+          filterText: suggestion + ' ' + filename + ' ' + baseFilename // Help with VS Code's built-in filtering
+        });
+      }
     }
 
-    connection.console.log(`Generated ${completions.length} template completions`);
+    connection.console.log(`Generated ${completions.length} filtered template completions`);
   }
 
   // Block completion for block() function calls
@@ -1044,6 +1137,166 @@ connection.onCompletion((params: TextDocumentPositionParams): CompletionItem[] =
 
   connection.console.log(`Returning ${completions.length} completions`);
   return completions;
+});
+
+// Document Symbol Provider - provides outline view for templates
+connection.onDocumentSymbol((params: DocumentSymbolParams): DocumentSymbol[] => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !parser) {
+    return [];
+  }
+
+  connection.console.log(`Document symbol request for ${params.textDocument.uri}`);
+
+  const symbols: DocumentSymbol[] = [];
+  const template = parser.parse(document);
+  const text = document.getText();
+
+  // Add template extends information
+  if (template.extends && template.extends.trim() !== '') {
+    const extendsMatch = text.match(/\{%\s*extends\s+['"]([^'"]*)['"]/);
+    if (extendsMatch) {
+      const start = document.positionAt(extendsMatch.index!);
+      const end = document.positionAt(extendsMatch.index! + extendsMatch[0].length);
+      symbols.push({
+        name: `extends "${template.extends}"`,
+        detail: 'Template Inheritance',
+        kind: SymbolKind.Namespace,
+        range: Range.create(start, end),
+        selectionRange: Range.create(start, end)
+      });
+    }
+  }  // Add blocks
+  const blockSymbols: DocumentSymbol[] = [];
+  for (const [blockName, range] of Object.entries(template.blocks)) {
+    // Validate block name
+    if (!blockName || blockName.trim() === '') {
+      connection.console.warn(`Skipping block with empty name`);
+      continue;
+    }
+
+    // Find the end of the block
+    const blockStart = document.offsetAt(range.start);
+    const blockEndRegex = new RegExp(`\\{%\\s*endblock(?:\\s+${escapeRegex(blockName)})?\\s*%\\}`, 'g');
+    blockEndRegex.lastIndex = blockStart;
+    const blockEndMatch = blockEndRegex.exec(text);
+
+    let blockEndRange = range;
+    if (blockEndMatch) {
+      const blockEndPos = document.positionAt(blockEndMatch.index + blockEndMatch[0].length);
+      blockEndRange = Range.create(range.start, blockEndPos);
+    }
+
+    blockSymbols.push({
+      name: blockName,
+      detail: 'Twig Block',
+      kind: SymbolKind.Method,
+      range: blockEndRange,
+      selectionRange: range,
+      children: []
+    });
+  }
+
+  if (blockSymbols.length > 0) {
+    symbols.push({
+      name: 'Blocks',
+      detail: `${blockSymbols.length} block(s)`,
+      kind: SymbolKind.Class,
+      range: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      selectionRange: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      children: blockSymbols
+    });
+  }
+
+  // Add includes
+  const includeSymbols: DocumentSymbol[] = [];
+  for (const includedTemplate of template.includes) {
+    // Validate include template name
+    if (!includedTemplate || includedTemplate.trim() === '') {
+      connection.console.warn(`Skipping include with empty template name`);
+      continue;
+    }
+
+    // Find include statements
+    const includeRegex = new RegExp(`\\{%\\s*include\\s+['"]${escapeRegex(includedTemplate)}['"]`, 'g');
+    let match;
+    while ((match = includeRegex.exec(text)) !== null) {
+      const start = document.positionAt(match.index);
+      const end = document.positionAt(match.index + match[0].length);
+      includeSymbols.push({
+        name: includedTemplate,
+        detail: 'Included Template',
+        kind: SymbolKind.File,
+        range: Range.create(start, end),
+        selectionRange: Range.create(start, end)
+      });
+    }
+  }
+
+  if (includeSymbols.length > 0) {
+    symbols.push({
+      name: 'Includes',
+      detail: `${includeSymbols.length} include(s)`,
+      kind: SymbolKind.Module,
+      range: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      selectionRange: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      children: includeSymbols
+    });
+  }  // Add variables
+  const variableSymbols: DocumentSymbol[] = [];
+  const processedVars = new Set<string>();
+
+  for (const [varName, ranges] of Object.entries(template.variables)) {
+    // Validate variable name
+    if (!varName || varName.trim() === '' || processedVars.has(varName)) {
+      if (!varName || varName.trim() === '') {
+        connection.console.warn(`Skipping variable with empty name`);
+      }
+      continue;
+    }
+    processedVars.add(varName);
+
+    // Validate ranges array
+    if (!ranges || ranges.length === 0) {
+      connection.console.warn(`Skipping variable ${varName} with no ranges`);
+      continue;
+    }
+
+    // Use the first occurrence as the main symbol
+    const firstRange = ranges[0];
+    variableSymbols.push({
+      name: varName,
+      detail: `Used ${ranges.length} time(s)`,
+      kind: SymbolKind.Variable,
+      range: firstRange,
+      selectionRange: firstRange
+    });
+  }
+
+  if (variableSymbols.length > 0) {
+    symbols.push({
+      name: 'Variables',
+      detail: `${variableSymbols.length} variable(s)`,
+      kind: SymbolKind.Object,
+      range: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      selectionRange: Range.create(Position.create(0, 0), Position.create(0, 0)),
+      children: variableSymbols
+    });
+  }
+
+  connection.console.log(`Generated ${symbols.length} document symbols`);
+
+  // Debug: Log all symbol names to check for empty ones
+  symbols.forEach((symbol, index) => {
+    connection.console.log(`Symbol ${index}: name="${symbol.name}", detail="${symbol.detail}", children=${symbol.children?.length || 0}`);
+    if (symbol.children) {
+      symbol.children.forEach((child, childIndex) => {
+        connection.console.log(`  Child ${childIndex}: name="${child.name}", detail="${child.detail}"`);
+      });
+    }
+  });
+
+  return symbols;
 });
 
 // Document validation - provides diagnostics for Twig templates
@@ -1158,3 +1411,162 @@ documents.listen(connection);
 
 // Listen on the connection
 connection.listen();
+
+// Find References handler - shows all usages of templates, blocks, and variables
+connection.onReferences((params: ReferenceParams): Location[] => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !parser) {
+    return [];
+  }
+
+  connection.console.log(`Find references request for ${params.textDocument.uri} at ${params.position.line}:${params.position.character}`);
+
+  const twigMatch = parser.findTwigMatchAtPosition(document, params.position);
+  if (!twigMatch) {
+    connection.console.log('No Twig match found for references');
+    return [];
+  }
+
+  const references: Location[] = [];
+
+  switch (twigMatch.type) {
+    case 'extends':
+    case 'include':
+      // Find all places where this template is referenced
+      if (twigMatch.templateName) {
+        const templatePath = parser.resolveTemplatePath(twigMatch.templateName, document.uri);
+        if (templatePath) {
+          const templateUri = URI.file(templatePath).toString();
+          references.push(...findTemplateReferences(twigMatch.templateName, templateUri));
+        }
+      }
+      break;
+
+    case 'block':
+    case 'block_reference':
+      // Find all places where this block is defined or referenced
+      references.push(...findBlockReferences(twigMatch.name, document));
+      break;
+
+    case 'variable':
+      // Find all places where this variable is used in the current template
+      references.push(...findVariableReferences(twigMatch.name, document));
+      break;
+  }
+
+  connection.console.log(`Found ${references.length} references`);
+  return references;
+});
+
+function findTemplateReferences(templateName: string, templateUri: string): Location[] {
+  const references: Location[] = [];
+  const allTemplates = parser.getAllTemplateFiles();
+
+  for (const templatePath of allTemplates) {
+    try {
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const doc = TextDocument.create(
+        URI.file(templatePath).toString(),
+        'twig',
+        1,
+        content
+      );
+
+      // Find extends references
+      const extendsRegex = new RegExp(`\\{%\\s*extends\\s+['"]${escapeRegex(templateName)}['"]`, 'g');
+      let match;
+      while ((match = extendsRegex.exec(content)) !== null) {
+        const start = doc.positionAt(match.index + match[0].indexOf(templateName));
+        const end = doc.positionAt(match.index + match[0].indexOf(templateName) + templateName.length);
+        references.push(Location.create(doc.uri, Range.create(start, end)));
+      }
+
+      // Find include references
+      const includeRegex = new RegExp(`\\{%\\s*include\\s+['"]${escapeRegex(templateName)}['"]`, 'g');
+      while ((match = includeRegex.exec(content)) !== null) {
+        const start = doc.positionAt(match.index + match[0].indexOf(templateName));
+        const end = doc.positionAt(match.index + match[0].indexOf(templateName) + templateName.length);
+        references.push(Location.create(doc.uri, Range.create(start, end)));
+      }
+    } catch (error) {
+      connection.console.error(`Error reading template ${templatePath}: ${error}`);
+    }
+  }
+
+  // Include the definition itself if requested
+  if (templateUri) {
+    references.push(Location.create(templateUri, Range.create(Position.create(0, 0), Position.create(0, 0))));
+  }
+
+  return references;
+}
+
+function findBlockReferences(blockName: string, document: TextDocument): Location[] {
+  const references: Location[] = [];
+  const template = parser.parse(document);
+
+  // Add block definition in current template
+  if (template.blocks[blockName]) {
+    references.push(Location.create(document.uri, template.blocks[blockName]));
+  }
+
+  // Add block references in current template
+  if (template.blockReferences[blockName]) {
+    template.blockReferences[blockName].forEach(range => {
+      references.push(Location.create(document.uri, range));
+    });
+  }
+
+  // Search in parent and child templates
+  const allTemplates = parser.getAllTemplateFiles();
+  for (const templatePath of allTemplates) {
+    if (templatePath === URI.parse(document.uri).fsPath) {
+      continue; // Skip current template, already processed
+    }
+
+    try {
+      const content = fs.readFileSync(templatePath, 'utf8');
+      const doc = TextDocument.create(
+        URI.file(templatePath).toString(),
+        'twig',
+        1,
+        content
+      );
+      const templateInfo = parser.parse(doc);
+
+      // Check if this template has the block
+      if (templateInfo.blocks[blockName]) {
+        references.push(Location.create(doc.uri, templateInfo.blocks[blockName]));
+      }
+
+      // Check if this template references the block
+      if (templateInfo.blockReferences[blockName]) {
+        templateInfo.blockReferences[blockName].forEach(range => {
+          references.push(Location.create(doc.uri, range));
+        });
+      }
+    } catch (error) {
+      connection.console.error(`Error reading template ${templatePath}: ${error}`);
+    }
+  }
+
+  return references;
+}
+
+function findVariableReferences(variableName: string, document: TextDocument): Location[] {
+  const references: Location[] = [];
+  const template = parser.parse(document);
+
+  // Add all variable references in current template
+  if (template.variables[variableName]) {
+    template.variables[variableName].forEach(range => {
+      references.push(Location.create(document.uri, range));
+    });
+  }
+
+  return references;
+}
+
+function escapeRegex(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
