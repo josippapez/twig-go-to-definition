@@ -114,13 +114,6 @@ This document outlines potential features and improvements for the Twig Go to De
 
 ## 🛠️ **Development Tools**
 
-### Template Formatter
-- **Description**: Format Twig templates with proper indentation
-- **Example**: Format Document command for Twig files
-- **Benefit**: Consistent code style
-- **Priority**: Medium
-- **Implementation**: Document formatting provider
-
 ### Template Generator
 - **Description**: Scaffold new templates with boilerplate code
 - **Example**: Command to create template with basic structure
@@ -280,7 +273,6 @@ This document outlines potential features and improvements for the Twig Go to De
 2. **Template Workspace View** - Better project navigation and organization
 3. **Template Hot Reload** - Development workflow enhancement
 4. **Unused Template Detection** - Code cleanup and project maintenance
-5. **Template Formatter** - Code quality and consistency
 
 ### Low Priority Features (Nice to Have)
 1. **Template-Specific Snippets** - Developer productivity boost

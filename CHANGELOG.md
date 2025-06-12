@@ -4,6 +4,22 @@ All notable changes to the "twig-go-to-definition" extension will be documented 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.9] - 2025-06-12
+
+### Changed
+
+- **Major Architecture Refactor**: Split monolithic 1,647-line server into modular components
+  - Separated providers into individual files (definition, hover, completion, etc.)
+  - Centralized type definitions and configuration management
+  - Improved maintainability and testability
+  - Better error isolation and handling
+- **Enhanced Performance**: More efficient code organization and imports
+
+### Technical
+
+- Modular provider architecture for better code organization
+- Improved type safety with centralized type definitions
+
 ## [0.0.8] - 2025-06-12
 
 ### Added
