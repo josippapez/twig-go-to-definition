@@ -2,7 +2,7 @@
   "name": "twig-go-to-definition",
   "displayName": "Twig Go to Definition",
   "description": "Go to Definition support for Twig templates using Language Server Protocol",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "JosipPapez",
   "author": {
     "name": "Josip Papež",

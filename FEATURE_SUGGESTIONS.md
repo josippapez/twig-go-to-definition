@@ -21,19 +21,13 @@ This document outlines potential features and improvements for the Twig Go to De
 
 ### Developer Experience
 - ✅ **Hover Information** - Detailed template, block, and variable information
+- ✅ **Template Preview in Hover** - Show template content preview with metadata
 - ✅ **Real-time Diagnostics** - Template validation and error detection
 - ✅ **Enhanced Error Handling** - Robust parsing with validation
 
 ---
 
 ## 🚀 **Remaining High-Priority Features**
-
-### Template Preview in Hover
-- **Description**: Show template content preview in hover documentation
-- **Example**: Hovering over template name shows first few lines of content
-- **Benefit**: Quick understanding of template purpose without opening file
-- **Priority**: High
-- **Implementation**: Read file content and format for markdown display
 
 ### Rename Template Refactoring
 - **Description**: Rename template file and update all references automatically
@@ -276,9 +270,9 @@ This document outlines potential features and improvements for the Twig Go to De
 
 ### Next High Priority Features (Quick Wins)
 
-1. **Template Preview in Hover** - Enhanced hover experience with content preview
-2. **Rename Template Refactoring** - Essential workflow improvement for safe refactoring
-3. **Circular Dependency Detection** - Prevents critical runtime errors
+1. **Rename Template Refactoring** - Essential workflow improvement for safe refactoring
+2. **Circular Dependency Detection** - Prevents critical runtime errors
+3. **Incremental Parsing** - Faster response times in large projects
 
 ### Medium Priority Features (Valuable Additions)
 
@@ -297,17 +291,8 @@ This document outlines potential features and improvements for the Twig Go to De
 
 ## 💡 **Implementation Recommendations**
 
-### For Next Version (0.0.8)
-Focus on **Template Preview in Hover** as it provides immediate value and enhances the existing hover functionality that's already working well.
-
-**Implementation approach**:
-- Extend existing hover provider
-- Read template file content safely (with size limits)
-- Format first few lines for markdown display
-- Add file metadata (size, last modified)
-
-### For Version 0.0.9
-Implement **Rename Template Refactoring** for safe refactoring workflows.
+### For Next Version (0.0.9)
+Focus on **Rename Template Refactoring** as it provides essential workflow improvements and builds on the existing "Find All References" functionality.
 
 **Implementation approach**:
 - Use VS Code's rename provider API
@@ -315,8 +300,17 @@ Implement **Rename Template Refactoring** for safe refactoring workflows.
 - Update all include/extend statements
 - Handle file system operations safely
 
+### For Version 0.0.10
+Implement **Circular Dependency Detection** for robustness.
+
+**Implementation approach**:
+- Extend existing template parser
+- Implement graph traversal algorithm
+- Add diagnostic provider for circular references
+- Provide clear error messages and suggestions
+
 ### For Version 0.1.0
-Add **Circular Dependency Detection** for robustness.
+Add **Incremental Parsing** for performance improvements.
 
 **Implementation approach**:
 - Extend existing template parser
